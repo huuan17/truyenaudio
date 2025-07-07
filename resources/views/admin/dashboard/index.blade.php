@@ -30,7 +30,7 @@
                     <div class="icon">
                         <i class="fas fa-book"></i>
                     </div>
-                    <a href="{{ route('stories.index') }}" class="small-box-footer">
+                    <a href="{{ route('admin.stories.index') }}" class="small-box-footer">
                         Xem thêm <i class="fas fa-arrow-circle-right"></i>
                     </a>
                 </div>
@@ -76,7 +76,7 @@
                     <div class="icon">
                         <i class="fas fa-users"></i>
                     </div>
-                    <a href="{{ route('users.index') }}" class="small-box-footer">
+                    <a href="{{ route('admin.users.index') }}" class="small-box-footer">
                         Quản lý <i class="fas fa-arrow-circle-right"></i>
                     </a>
                 </div>
@@ -94,18 +94,18 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-3">
-                                <a href="{{ route('stories.create') }}" class="btn btn-primary btn-block">
+                                <a href="{{ route('admin.stories.create') }}" class="btn btn-primary btn-block">
                                     <i class="fas fa-plus"></i> Thêm truyện mới
                                 </a>
                             </div>
                             <div class="col-md-3">
-                                <a href="{{ route('genres.create') }}" class="btn btn-success btn-block">
+                                <a href="{{ route('admin.genres.create') }}" class="btn btn-success btn-block">
                                     <i class="fas fa-tags"></i> Thêm thể loại
                                 </a>
                             </div>
                             @if(auth()->user()->isAdmin())
                             <div class="col-md-3">
-                                <a href="{{ route('users.create') }}" class="btn btn-warning btn-block">
+                                <a href="{{ route('admin.users.create') }}" class="btn btn-warning btn-block">
                                     <i class="fas fa-user-plus"></i> Thêm user
                                 </a>
                             </div>

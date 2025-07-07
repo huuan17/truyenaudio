@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -42,4 +43,22 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    /**
+     * Kiểm tra user có phải admin không
+     */
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Lấy badge role
+     */
+    public function getRoleBadgeAttribute()
+    {
+        return $this->role === 'admin'
+            ? '<span class="badge badge-danger">Admin</span>'
+            : '<span class="badge badge-primary">User</span>';
+    }
 }

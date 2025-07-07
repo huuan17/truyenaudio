@@ -40,9 +40,47 @@
 
   <!-- Navbar -->
   <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+    <!-- Left navbar links -->
     <ul class="navbar-nav">
       <li class="nav-item">
         <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+      </li>
+    </ul>
+
+    <!-- Right navbar links -->
+    <ul class="navbar-nav ml-auto">
+      <!-- User Dropdown Menu -->
+      <li class="nav-item dropdown">
+        <a class="nav-link" data-toggle="dropdown" href="#">
+          <i class="fas fa-user"></i>
+          <span class="ml-1">{{ auth()->user()->name }}</span>
+          <i class="fas fa-caret-down ml-1"></i>
+        </a>
+        <div class="dropdown-menu dropdown-menu-lg dropdown-menu-right">
+          <div class="dropdown-header">
+            <strong>{{ auth()->user()->name }}</strong>
+            <br>
+            <small class="text-muted">{{ auth()->user()->email }}</small>
+            <br>
+            {!! auth()->user()->role_badge !!}
+          </div>
+          <div class="dropdown-divider"></div>
+          <a href="{{ route('admin.users.show', auth()->user()) }}" class="dropdown-item">
+            <i class="fas fa-user mr-2"></i> Thông tin cá nhân
+          </a>
+          <div class="dropdown-divider"></div>
+          <form action="{{ route('logout') }}" method="POST" style="display: inline;">
+            @csrf
+            <button type="submit" class="dropdown-item text-danger">
+              <i class="fas fa-sign-out-alt mr-2"></i> Đăng xuất
+            </button>
+          </form>
+        </div>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-widget="fullscreen" href="#" role="button">
+          <i class="fas fa-expand-arrows-alt"></i>
+        </a>
       </li>
     </ul>
   </nav>
@@ -57,18 +95,63 @@
       <nav class="mt-2">
         <ul class="nav nav-pills nav-sidebar flex-column" role="menu">
           <li class="nav-item">
-            <a href="{{ route('stories.index') }}" class="nav-link">
+            <a href="{{ route('admin.dashboard') }}" class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
+              <i class="nav-icon fas fa-tachometer-alt"></i>
+              <p>Dashboard</p>
+            </a>
+          </li>
+
+          <li class="nav-header">QUẢN LÝ NỘI DUNG</li>
+          <li class="nav-item">
+            <a href="{{ route('admin.stories.index') }}" class="nav-link {{ request()->routeIs('admin.stories.*') ? 'active' : '' }}">
               <i class="nav-icon fas fa-book"></i>
               <p>Truyện</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="{{ route('genres.index') }}" class="nav-link">
-              <i class="nav-icon fas fa-book"></i>
+            <a href="{{ route('admin.genres.index') }}" class="nav-link {{ request()->routeIs('admin.genres.*') ? 'active' : '' }}">
+              <i class="nav-icon fas fa-tags"></i>
               <p>Thể loại</p>
             </a>
           </li>
-          <!-- Thêm các mục menu khác nếu cần -->
+
+          <li class="nav-header">SOCIAL MEDIA</li>
+          <li class="nav-item">
+            <a href="{{ route('admin.channels.index') }}" class="nav-link {{ request()->routeIs('admin.channels.*') ? 'active' : '' }}">
+              <i class="nav-icon fas fa-broadcast-tower"></i>
+              <p>Quản Lý Kênh</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{{ route('admin.scheduled-posts.index') }}" class="nav-link {{ request()->routeIs('admin.scheduled-posts.*') ? 'active' : '' }}">
+              <i class="nav-icon fas fa-calendar-alt"></i>
+              <p>Lịch Đăng Video</p>
+            </a>
+          </li>
+
+          <li class="nav-header">VIDEO GENERATOR</li>
+          <li class="nav-item">
+            <a href="{{ route('admin.logos.index') }}" class="nav-link {{ request()->routeIs('admin.logos.*') ? 'active' : '' }}">
+              <i class="nav-icon fas fa-image"></i>
+              <p>Quản Lý Logo</p>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a href="{{ route('admin.tiktok.index') }}" class="nav-link {{ request()->routeIs('admin.tiktok.*') ? 'active' : '' }}">
+              <i class="nav-icon fab fa-tiktok"></i>
+              <p>TikTok Video</p>
+            </a>
+          </li>
+
+          @if(auth()->user()->isAdmin())
+          <li class="nav-header">QUẢN TRỊ HỆ THỐNG</li>
+          <li class="nav-item">
+            <a href="{{ route('admin.users.index') }}" class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
+              <i class="nav-icon fas fa-users"></i>
+              <p>Quản lý Users</p>
+            </a>
+          </li>
+          @endif
         </ul>
       </nav>
     </div>
