@@ -175,6 +175,123 @@ class ChapterController extends Controller
     }
 
     /**
+     * Chuyển đổi chapter thành audio
+     */
+    public function convertToTts(Request $request, Chapter $chapter)
+    {
+        // Sử dụng default settings từ story nếu không có trong request
+        $story = $chapter->story;
+        $defaultVoice = $story->default_tts_voice ?? 'hn_female_ngochuyen_full_48k-fhg';
+        $defaultBitrate = $story->default_tts_bitrate ?? 128;
+        $defaultSpeed = $story->default_tts_speed ?? 1.0;
+        $defaultVolume = $story->default_tts_volume ?? 1.0;
+
+        $request->validate([
+            'voice' => 'nullable|string',
+            'bitrate' => 'nullable|numeric|in:64,128,192,256,320',
+            'speed' => 'nullable|numeric|in:0.5,0.75,1.0,1.25,1.5,2.0',
+            'volume' => 'nullable|numeric|in:1.0,1.5,2.0',
+        ]);
+
+        // Sử dụng giá trị từ request hoặc default từ story
+        $voice = $request->input('voice') ?: $defaultVoice;
+        $bitrate = $request->input('bitrate') ?: $defaultBitrate;
+        $speed = $request->input('speed') ?: $defaultSpeed;
+        $volume = $request->input('volume') ?: $defaultVolume;
+
+        // Kiểm tra xem chapter có thể chuyển đổi không
+        if (!$chapter->canConvertToTts()) {
+            $message = 'Chapter này không thể chuyển đổi TTS.';
+
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => $message], 400);
+            }
+
+            return back()->with('error', $message);
+        }
+
+        // Chạy command TTS với settings đã xử lý
+        try {
+            \App\Jobs\ProcessChapterTtsJob::dispatch($chapter->id, $voice, $bitrate, $speed, $volume);
+
+            $message = "Đã bắt đầu chuyển đổi chapter {$chapter->chapter_number} thành audio.";
+
+            if ($request->ajax()) {
+                return response()->json(['success' => true, 'message' => $message]);
+            }
+
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            $message = 'Lỗi khi bắt đầu chuyển đổi: ' . $e->getMessage();
+
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => $message], 500);
+            }
+
+            return back()->with('error', $message);
+        }
+    }
+
+    /**
+     * Chuyển đổi tất cả chapters của story thành audio
+     */
+    public function convertAllToTts(Request $request, Story $story)
+    {
+        // Sử dụng default settings từ story nếu không có trong request
+        $defaultVoice = $story->default_tts_voice ?? 'hn_female_ngochuyen_full_48k-fhg';
+        $defaultBitrate = $story->default_tts_bitrate ?? 128;
+        $defaultSpeed = $story->default_tts_speed ?? 1.0;
+        $defaultVolume = $story->default_tts_volume ?? 1.0;
+
+        $request->validate([
+            'voice' => 'nullable|string',
+            'bitrate' => 'nullable|numeric|in:64,128,192,256,320',
+            'speed' => 'nullable|numeric|in:0.5,0.75,1.0,1.25,1.5,2.0',
+            'volume' => 'nullable|numeric|in:1.0,1.5,2.0',
+            'only_pending' => 'boolean',
+        ]);
+
+        // Sử dụng giá trị từ request hoặc default từ story
+        $voice = $request->input('voice') ?: $defaultVoice;
+        $bitrate = $request->input('bitrate') ?: $defaultBitrate;
+        $speed = $request->input('speed') ?: $defaultSpeed;
+        $volume = $request->input('volume') ?: $defaultVolume;
+
+        // Lấy chapters cần xử lý
+        $query = $story->chapters();
+        if ($request->only_pending) {
+            $query->where(function($q) {
+                $q->whereNull('audio_file_path')->orWhere('audio_file_path', '');
+            });
+        } else {
+            $query->whereNull('audio_file_path');
+        }
+
+        $chaptersCount = $query->count();
+
+        if ($chaptersCount === 0) {
+            return back()->with('info', 'Không có chapter nào cần chuyển đổi TTS.');
+        }
+
+        // Chạy command TTS cho tất cả chapters với settings đã xử lý
+        try {
+            // Queue TTS job for each chapter individually
+            $chapters = $query->get();
+            foreach ($chapters as $chapter) {
+                \App\Jobs\ProcessChapterTtsJob::dispatch($chapter->id, $voice, $bitrate, $speed, $volume);
+            }
+
+            $message = $request->only_pending
+                ? "Đã bắt đầu chuyển đổi {$chaptersCount} chapter(s) chưa xử lý của truyện '{$story->title}' thành audio."
+                : "Đã bắt đầu chuyển đổi tất cả {$chaptersCount} chapter(s) của truyện '{$story->title}' thành audio.";
+
+            return back()->with('success', $message);
+        } catch (\Exception $e) {
+            return back()->with('error', 'Lỗi khi bắt đầu chuyển đổi: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Bulk TTS conversion for selected chapters with queue management
      */
     public function bulkTts(Request $request)

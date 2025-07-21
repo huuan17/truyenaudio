@@ -614,13 +614,7 @@
             </ul>
           </li>
 
-          <!-- Story Maintenance -->
-          <li class="nav-item">
-            <a href="{{ route('admin.maintenance.index') }}" class="nav-link {{ request()->routeIs('admin.maintenance.*') ? 'active' : '' }}">
-              <i class="nav-icon fas fa-tools text-warning"></i>
-              <p>Story Maintenance</p>
-            </a>
-          </li>
+
 
           <!-- 3. Mạng Xã Hội (Collapsible) -->
           <li class="nav-item {{ request()->routeIs('admin.channels.*') || request()->routeIs('admin.scheduled-posts.*') ? 'menu-open' : '' }}">

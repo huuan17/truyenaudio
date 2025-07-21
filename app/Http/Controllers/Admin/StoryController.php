@@ -1241,4 +1241,109 @@ class StoryController extends Controller
             ]);
         }
     }
+
+    /**
+     * Hiển thị trang maintenance cho story
+     */
+    public function maintenance(Story $story)
+    {
+        // Thống kê cho story này
+        $stats = [
+            'total_chapters' => $story->chapters()->count(),
+            'chapters_with_content' => $story->chapters()->whereNotNull('file_path')->count(),
+            'chapters_with_audio' => $story->chapters()->whereNotNull('audio_file_path')->count(),
+            'pending_tts' => $story->chapters()->where('audio_status', 'pending')->count(),
+            'processing_tts' => $story->chapters()->where('audio_status', 'processing')->count(),
+            'expected_chapters' => $story->end_chapter - $story->start_chapter + 1,
+        ];
+
+        // Kiểm tra chapter count có đúng không
+        $chapterCountIssue = $stats['total_chapters'] != $stats['expected_chapters'] && $stats['total_chapters'] > 0;
+
+        // Tìm TTS requests bị stuck cho story này
+        $stuckTTS = $story->chapters()
+            ->where('audio_status', 'processing')
+            ->where('tts_started_at', '<', now()->subMinutes(30))
+            ->get();
+
+        return view('admin.stories.maintenance', compact('story', 'stats', 'chapterCountIssue', 'stuckTTS'));
+    }
+
+    /**
+     * Sửa chapter count cho story
+     */
+    public function fixChapterCount(Story $story)
+    {
+        $actualCount = $story->chapters()->count();
+        $expectedCount = $story->end_chapter - $story->start_chapter + 1;
+
+        if ($actualCount > 0 && $actualCount != $expectedCount) {
+            $story->end_chapter = $story->start_chapter + $actualCount - 1;
+            $story->save();
+
+            return redirect()->back()->with('success', "✅ Đã cập nhật số chương từ {$expectedCount} thành {$actualCount}");
+        }
+
+        return redirect()->back()->with('info', 'Số chương đã chính xác, không cần sửa');
+    }
+
+    /**
+     * Cập nhật crawl status cho story
+     */
+    public function updateCrawlStatus(Story $story)
+    {
+        $totalChapters = $story->chapters()->count();
+        $chaptersWithContent = $story->chapters()->whereNotNull('file_path')->count();
+
+        if ($totalChapters > 0 && $chaptersWithContent == $totalChapters) {
+            $story->crawl_status = 1; // Completed
+            $story->save();
+
+            return redirect()->back()->with('success', '✅ Đã cập nhật trạng thái crawl thành "Hoàn thành"');
+        } elseif ($chaptersWithContent > 0) {
+            $story->crawl_status = 0; // Partial
+            $story->save();
+
+            return redirect()->back()->with('info', '📝 Đã cập nhật trạng thái crawl thành "Chưa hoàn thành"');
+        }
+
+        return redirect()->back()->with('info', 'Trạng thái crawl đã chính xác');
+    }
+
+    /**
+     * Hủy pending TTS cho story
+     */
+    public function cancelPendingTTS(Story $story)
+    {
+        $cancelled = $story->chapters()
+            ->where('audio_status', 'pending')
+            ->whereNull('tts_started_at')
+            ->update(['audio_status' => 'none']);
+
+        if ($cancelled > 0) {
+            return redirect()->back()->with('success', "✅ Đã hủy {$cancelled} TTS requests đang chờ");
+        }
+
+        return redirect()->back()->with('info', 'Không có TTS requests nào cần hủy');
+    }
+
+    /**
+     * Reset stuck TTS cho story
+     */
+    public function resetStuckTTS(Story $story)
+    {
+        $reset = $story->chapters()
+            ->where('audio_status', 'processing')
+            ->where('tts_started_at', '<', now()->subMinutes(30))
+            ->update([
+                'audio_status' => 'none',
+                'tts_started_at' => null
+            ]);
+
+        if ($reset > 0) {
+            return redirect()->back()->with('success', "✅ Đã reset {$reset} TTS requests bị stuck");
+        }
+
+        return redirect()->back()->with('info', 'Không có TTS requests nào bị stuck');
+    }
 }

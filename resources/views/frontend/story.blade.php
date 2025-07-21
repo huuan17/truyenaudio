@@ -117,14 +117,14 @@
                                     @endphp
 
                                     @if($firstChapter)
-                                        <a href="{{ route('chapter.show.vietnamese', [$story->slug, $firstChapter->chapter_number]) }}"
+                                        <a href="{{ route('chapter.show', [$story->slug, $firstChapter->chapter_number]) }}"
                                            class="btn btn-primary">
                                             <i class="fas fa-book-open me-2"></i>Đọc từ đầu
                                         </a>
                                     @endif
 
                                     @if($lastChapter && $chapters->total() > 1)
-                                        <a href="{{ route('chapter.show.vietnamese', [$story->slug, $lastChapter->chapter_number]) }}"
+                                        <a href="{{ route('chapter.show', [$story->slug, $lastChapter->chapter_number]) }}"
                                            class="btn btn-outline-primary">
                                             <i class="fas fa-forward me-2"></i>Chương mới nhất
                                         </a>
@@ -308,7 +308,7 @@
                     @if($chapters->count() > 0)
                         <div class="list-group list-group-flush">
                             @foreach($chapters as $chapter)
-                                <a href="{{ route('chapter.show.vietnamese', [$story->slug, $chapter->chapter_number]) }}"
+                                <a href="{{ route('chapter.show', [$story->slug, $chapter->chapter_number]) }}"
                                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>Chương {{ $chapter->chapter_number }}</strong>

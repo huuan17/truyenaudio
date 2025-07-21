@@ -32,6 +32,9 @@
                         <a href="{{ route('admin.stories.tts.form', $story) }}" class="btn btn-warning btn-sm">
                             <i class="fas fa-microphone mr-1"></i>TTS Management
                         </a>
+                        <a href="{{ route('admin.stories.maintenance', $story) }}" class="btn btn-info btn-sm">
+                            <i class="fas fa-tools mr-1"></i>Maintenance
+                        </a>
                     </div>
                 </div>
                 <div class="card-body">

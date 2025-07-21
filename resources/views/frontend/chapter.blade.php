@@ -37,18 +37,18 @@
                     <!-- Navigation Buttons -->
                     <div class="d-flex justify-content-center gap-2 flex-wrap">
                         @if($prevChapter)
-                            <a href="{{ route('chapter.show.vietnamese', [$story->slug, $prevChapter->chapter_number]) }}"
+                            <a href="{{ route('chapter.show', [$story->slug, $prevChapter->chapter_number]) }}"
                                class="btn btn-outline-primary">
                                 <i class="fas fa-chevron-left me-1"></i>Chương trước
                             </a>
                         @endif
 
-                        <a href="{{ route('story.show.vietnamese', $story->slug) }}" class="btn btn-outline-secondary">
+                        <a href="{{ route('story.show', $story->slug) }}" class="btn btn-outline-secondary">
                             <i class="fas fa-list me-1"></i>Danh sách chương
                         </a>
 
                         @if($nextChapter)
-                            <a href="{{ route('chapter.show.vietnamese', [$story->slug, $nextChapter->chapter_number]) }}"
+                            <a href="{{ route('chapter.show', [$story->slug, $nextChapter->chapter_number]) }}"
                                class="btn btn-outline-primary">
                                 Chương tiếp <i class="fas fa-chevron-right ms-1"></i>
                             </a>
@@ -100,7 +100,7 @@
                             <div class="d-flex justify-content-center align-items-center gap-3 mb-3">
                                 <!-- Previous Chapter -->
                                 @if($prevChapter)
-                                <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='{{ route('chapter.show.vietnamese', [$story->slug, $prevChapter->chapter_number]) }}'">
+                                <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='{{ route('chapter.show', [$story->slug, $prevChapter->chapter_number]) }}'">
                                     <i class="fas fa-step-backward"></i>
                                 </button>
                                 @endif
@@ -122,7 +122,7 @@
 
                                 <!-- Next Chapter -->
                                 @if($nextChapter)
-                                <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='{{ route('chapter.show.vietnamese', [$story->slug, $nextChapter->chapter_number]) }}'">
+                                <button class="btn btn-outline-secondary btn-sm" onclick="window.location.href='{{ route('chapter.show', [$story->slug, $nextChapter->chapter_number]) }}'">
                                     <i class="fas fa-step-forward"></i>
                                 </button>
                                 @endif
@@ -266,7 +266,7 @@
                     <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                         <div>
                             @if($prevChapter)
-                                <a href="{{ route('chapter.show.vietnamese', [$story->slug, $prevChapter->chapter_number]) }}"
+                                <a href="{{ route('chapter.show', [$story->slug, $prevChapter->chapter_number]) }}"
                                    class="btn btn-primary">
                                     <i class="fas fa-chevron-left me-1"></i>Chương {{ $prevChapter->chapter_number }}
                                 </a>
@@ -281,7 +281,7 @@
                         
                         <div>
                             @if($nextChapter)
-                                <a href="{{ route('chapter.show.vietnamese', [$story->slug, $nextChapter->chapter_number]) }}"
+                                <a href="{{ route('chapter.show', [$story->slug, $nextChapter->chapter_number]) }}"
                                    class="btn btn-primary">
                                     Chương {{ $nextChapter->chapter_number }} <i class="fas fa-chevron-right ms-1"></i>
                                 </a>
@@ -356,7 +356,7 @@
                 </div>
                 <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
                     @foreach($story->chapters->sortBy('chapter_number') as $chap)
-                        <a href="{{ route('chapter.show.vietnamese', [$story->slug, $chap->chapter_number]) }}"
+                        <a href="{{ route('chapter.show', [$story->slug, $chap->chapter_number]) }}"
                            class="list-group-item list-group-item-action border-0 d-flex justify-content-between align-items-center {{ $chap->id === $chapter->id ? 'active' : '' }}">
                             <span>
                                 Chương {{ $chap->chapter_number }}
@@ -699,7 +699,7 @@
     let autoNextEnabled = @if($nextChapter) true @else false @endif;
     let countdownTimer = null;
     let countdownSeconds = 5;
-    let nextChapterUrl = '@if($nextChapter){{ route('chapter.show.vietnamese', [$story->slug, $nextChapter->chapter_number]) }}@endif';
+    let nextChapterUrl = '@if($nextChapter){{ route('chapter.show', [$story->slug, $nextChapter->chapter_number]) }}@endif';
 
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize audio player if exists

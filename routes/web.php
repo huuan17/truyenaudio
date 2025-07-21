@@ -33,6 +33,8 @@ Route::get('/hot', [App\Http\Controllers\HomeController::class, 'hot'])->name('s
 Route::get('/completed', [App\Http\Controllers\HomeController::class, 'completed'])->name('stories.completed');
 Route::get('/recent', [App\Http\Controllers\HomeController::class, 'recent'])->name('stories.recent');
 Route::get('/genre/{slug}', [App\Http\Controllers\HomeController::class, 'genre'])->name('genre.show');
+Route::get('/authors', [App\Http\Controllers\HomeController::class, 'authors'])->name('authors.index');
+Route::get('/author/{slug}', [App\Http\Controllers\HomeController::class, 'author'])->name('author.show');
 Route::get('/story/{slug}', [App\Http\Controllers\HomeController::class, 'story'])->name('story.show');
 Route::get('/story/{storySlug}/chapter/{chapterNumber}', [App\Http\Controllers\HomeController::class, 'chapter'])->name('chapter.show');
 
@@ -46,6 +48,13 @@ Route::middleware(['auth'])->group(function () {
         // Stories management
         Route::resource('stories', StoryController::class);
         Route::get('/stories-search', [StoryController::class, 'search'])->name('stories.search');
+
+        // Story maintenance
+        Route::get('/stories/{story}/maintenance', [StoryController::class, 'maintenance'])->name('stories.maintenance');
+        Route::post('/stories/{story}/fix-chapter-count', [StoryController::class, 'fixChapterCount'])->name('stories.fix-chapter-count');
+        Route::post('/stories/{story}/update-crawl-status', [StoryController::class, 'updateCrawlStatus'])->name('stories.update-crawl-status');
+        Route::post('/stories/{story}/cancel-pending-tts', [StoryController::class, 'cancelPendingTTS'])->name('stories.cancel-pending-tts');
+        Route::post('/stories/{story}/reset-stuck-tts', [StoryController::class, 'resetStuckTTS'])->name('stories.reset-stuck-tts');
 
         // Story chapters management
         Route::get('/stories/{story}/chapters', [StoryController::class, 'chapters'])->name('stories.chapters');
@@ -94,13 +103,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/chapters', [ChapterController::class, 'indexAll'])->name('chapters.index');
 
         // Chapter TTS routes
-        Route::post('/chapters/{chapter}/tts', [ChapterController::class, 'convertToTts'])->name('chapters.tts');
-        Route::post('/stories/{story}/chapters/tts-all', [ChapterController::class, 'convertAllToTts'])->name('chapters.tts.all');
-        Route::post('/chapters/bulk-tts', [ChapterController::class, 'bulkTts'])->name('chapters.bulk-tts');
-        Route::post('/chapters/bulk-delete', [ChapterController::class, 'bulkDelete'])->name('chapters.bulk-delete');
-        Route::get('/chapters/tts-status-summary/{story}', [ChapterController::class, 'getTtsStatusSummary'])->name('chapters.tts-status-summary');
-        Route::get('/chapters/bulk-tts-tasks/{story}', [ChapterController::class, 'getBulkTtsTasks'])->name('chapters.bulk-tts-tasks');
-        Route::post('/chapters/cancel-all-tts', [ChapterController::class, 'cancelAllTts'])->name('chapters.cancel-all-tts');
+        Route::post('/chapters/{chapter}/tts', [App\Http\Controllers\Admin\ChapterController::class, 'convertToTts'])->name('chapters.tts');
+        Route::post('/stories/{story}/chapters/tts-all', [App\Http\Controllers\Admin\ChapterController::class, 'convertAllToTts'])->name('chapters.tts.all');
+        Route::post('/chapters/bulk-tts', [App\Http\Controllers\Admin\ChapterController::class, 'bulkTts'])->name('chapters.bulk-tts');
+        Route::post('/chapters/bulk-delete', [App\Http\Controllers\Admin\ChapterController::class, 'bulkDelete'])->name('chapters.bulk-delete');
+        Route::get('/chapters/tts-status-summary/{story}', [App\Http\Controllers\Admin\ChapterController::class, 'getTtsStatusSummary'])->name('chapters.tts-status-summary');
+        Route::get('/chapters/bulk-tts-tasks/{story}', [App\Http\Controllers\Admin\ChapterController::class, 'getBulkTtsTasks'])->name('chapters.bulk-tts-tasks');
+        Route::post('/chapters/cancel-all-tts', [App\Http\Controllers\Admin\ChapterController::class, 'cancelAllTts'])->name('chapters.cancel-all-tts');
 
         // Chapter content route
         Route::get('/chapters/{chapter}/content', [ChapterController::class, 'getContent'])->name('chapters.content');
@@ -206,16 +215,7 @@ Route::middleware(['auth'])->group(function () {
             return view('admin.help.quick-reference');
         })->name('help.quick-reference');
 
-        // Story Maintenance
-        Route::prefix('maintenance')->name('maintenance.')->group(function () {
-            Route::get('/', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'index'])->name('index');
-            Route::post('/fix-chapter-count/{story}', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'fixChapterCount'])->name('fix-chapter-count');
-            Route::post('/update-crawl-status/{story}', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'updateCrawlStatus'])->name('update-crawl-status');
-            Route::post('/cancel-pending-tts/{story}', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'cancelPendingTTS'])->name('cancel-pending-tts');
-            Route::post('/cancel-all-tts', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'cancelAllPendingTTS'])->name('cancel-all-tts');
-            Route::post('/fix-stuck-tts', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'fixStuckTTS'])->name('fix-stuck-tts');
-            Route::post('/auto', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'runAutoMaintenance'])->name('auto');
-        });
+
 
         // Story TTS Management
         Route::get('/stories/{story}/tts-info', [App\Http\Controllers\Admin\StoryTtsController::class, 'getStoryTtsInfo'])->name('stories.tts-info');

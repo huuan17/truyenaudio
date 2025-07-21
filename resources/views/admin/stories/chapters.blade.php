@@ -586,9 +586,23 @@
             <form id="ttsForm" method="POST" action="#">
                 @csrf
                 <div class="modal-body">
+                    <!-- Thông tin TTS mặc định -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Cài đặt TTS mặc định của truyện:</strong>
+                        @php $ttsSettings = $story->getFormattedTtsSettings(); @endphp
+                        <ul class="mb-0 mt-2">
+                            <li>Giọng: {{ $ttsSettings['voice'] }}</li>
+                            <li>Bitrate: {{ $ttsSettings['bitrate'] }}</li>
+                            <li>Tốc độ: {{ $ttsSettings['speed'] }}</li>
+                            <li>Âm lượng: {{ $ttsSettings['volume'] }}</li>
+                        </ul>
+                        <small class="text-muted">Bạn có thể thay đổi cài đặt bên dưới hoặc để trống để sử dụng mặc định.</small>
+                    </div>
+
                     <div class="form-group">
                         <label for="voice">Giọng đọc</label>
-                        <select name="voice" id="voice" class="form-control" required>
+                        <select name="voice" id="voice" class="form-control">
+                            <option value="">-- Sử dụng mặc định ({{ $story->default_tts_voice ?? 'hn_female_ngochuyen_full_48k-fhg' }}) --</option>
                             <option value="hn_female_ngochuyen_full_48k-fhg">Ngọc Huyền (Nữ - Hà Nội)</option>
                             <option value="hn_male_manhtung_full_48k-fhg">Mạnh Tùng (Nam - Hà Nội)</option>
                             <option value="sg_female_thaotrinh_full_48k-fhg">Thảo Trinh (Nữ - Sài Gòn)</option>
@@ -600,9 +614,10 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="bitrate">Bitrate (kbps)</label>
-                                <select name="bitrate" id="bitrate" class="form-control" required>
+                                <select name="bitrate" id="bitrate" class="form-control">
+                                    <option value="">-- Sử dụng mặc định ({{ $story->default_tts_bitrate ?? '128' }} kbps) --</option>
                                     <option value="64">64 kbps</option>
-                                    <option value="128" selected>128 kbps</option>
+                                    <option value="128">128 kbps</option>
                                     <option value="192">192 kbps</option>
                                     <option value="256">256 kbps</option>
                                     <option value="320">320 kbps</option>
@@ -612,16 +627,27 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="speed">Tốc độ đọc</label>
-                                <select name="speed" id="speed" class="form-control" required>
+                                <select name="speed" id="speed" class="form-control">
+                                    <option value="">-- Sử dụng mặc định ({{ $story->default_tts_speed ?? '1.0' }}x) --</option>
                                     <option value="0.5">0.5x (Chậm)</option>
                                     <option value="0.75">0.75x</option>
-                                    <option value="1.0" selected>1.0x (Bình thường)</option>
+                                    <option value="1.0">1.0x (Bình thường)</option>
                                     <option value="1.25">1.25x</option>
                                     <option value="1.5">1.5x</option>
                                     <option value="2.0">2.0x (Nhanh)</option>
                                 </select>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="volume">Âm lượng</label>
+                        <select name="volume" id="volume" class="form-control">
+                            <option value="">-- Sử dụng mặc định ({{ $story->default_tts_volume ?? '1.0' }}x) --</option>
+                            <option value="1.0">100% (Bình thường)</option>
+                            <option value="1.5">150% (To hơn)</option>
+                            <option value="2.0">200% (Rất to)</option>
+                        </select>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -760,7 +786,7 @@ $(document).ready(function() {
         }
 
         var modal = $(this);
-        var actionUrl = '{{ url("/chapters") }}/' + chapterId + '/tts';
+        var actionUrl = '{{ url("/admin/chapters") }}/' + chapterId + '/tts';
 
         modal.find('.modal-title').text('Chuyển đổi Chapter ' + chapterNumber + ' thành Audio');
         modal.find('#ttsForm').attr('action', actionUrl);
