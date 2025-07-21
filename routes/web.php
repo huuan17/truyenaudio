@@ -148,8 +148,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/video-generator/status', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'status'])->name('video-generator.status');
         Route::post('/video-generator/generate', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generate'])->name('video-generator.generate');
         Route::post('/video-generator/generate-batch', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generateBatch'])->name('video-generator.generate-batch');
-        Route::delete('/video-generator/delete/{platform}/{filename}', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'delete'])->name('video-generator.delete');
+        Route::delete('/video-generator/delete', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'delete'])->name('video-generator.delete');
         Route::get('/video-generator/download/{platform}/{filename}', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'download'])->name('video-generator.download');
+
+        // AJAX endpoints for video generator
+        Route::post('/video-generator/calculate-duration', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'calculateDuration'])->name('video-generator.calculate-duration');
+        Route::post('/video-generator/validate-media', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'validateMedia'])->name('video-generator.validate-media');
+        Route::get('/video-generator/logo-library', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'getLogoLibrary'])->name('video-generator.logo-library');
 
         // Video Queue Management
         Route::get('/video-queue', [App\Http\Controllers\Admin\VideoQueueController::class, 'index'])->name('video-queue.index');
