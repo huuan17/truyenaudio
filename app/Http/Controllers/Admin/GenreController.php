@@ -29,7 +29,14 @@ class GenreController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255|unique:genres,name',
+            'title' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'content' => 'nullable|string',
+            'is_public' => 'boolean',
         ]);
+
+        // Set default value for is_public if not provided
+        $data['is_public'] = $request->has('is_public') ? true : false;
 
         Genre::create($data);
 
@@ -50,7 +57,14 @@ class GenreController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:255|unique:genres,name,' . $genre->id,
+            'title' => 'nullable|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'content' => 'nullable|string',
+            'is_public' => 'boolean',
         ]);
+
+        // Set default value for is_public if not provided
+        $data['is_public'] = $request->has('is_public') ? true : false;
 
         $genre->update($data);
 

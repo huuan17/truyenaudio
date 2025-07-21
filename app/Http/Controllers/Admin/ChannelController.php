@@ -176,6 +176,12 @@ class ChannelController extends Controller
             'default_category' => 'nullable|string',
             'auto_upload' => 'boolean',
             'is_active' => 'boolean',
+
+            // TikTok API credentials (manual update)
+            'tiktok_access_token' => 'nullable|string',
+            'tiktok_refresh_token' => 'nullable|string',
+            'tiktok_open_id' => 'nullable|string',
+            'clear_tiktok_credentials' => 'boolean',
         ]);
 
         try {
@@ -198,7 +204,45 @@ class ChannelController extends Controller
                 $defaultTags = array_map('trim', explode(',', $request->default_tags));
             }
 
-            $channel->update([
+            // Handle TikTok API credentials update
+            $apiCredentials = $channel->api_credentials;
+
+            if ($channel->platform === 'tiktok') {
+                // Clear credentials if requested
+                if ($request->boolean('clear_tiktok_credentials')) {
+                    $apiCredentials = null;
+                } else {
+                    // Update individual credentials if provided
+                    if ($request->filled('tiktok_access_token')) {
+                        if (!$apiCredentials) {
+                            $apiCredentials = [];
+                        }
+                        $apiCredentials['access_token'] = $request->tiktok_access_token;
+                        $apiCredentials['updated_at'] = now()->toDateTimeString();
+                        $apiCredentials['updated_manually'] = true;
+                    }
+
+                    if ($request->filled('tiktok_refresh_token')) {
+                        if (!$apiCredentials) {
+                            $apiCredentials = [];
+                        }
+                        $apiCredentials['refresh_token'] = $request->tiktok_refresh_token;
+                        $apiCredentials['updated_at'] = now()->toDateTimeString();
+                        $apiCredentials['updated_manually'] = true;
+                    }
+
+                    if ($request->filled('tiktok_open_id')) {
+                        if (!$apiCredentials) {
+                            $apiCredentials = [];
+                        }
+                        $apiCredentials['open_id'] = $request->tiktok_open_id;
+                        $apiCredentials['updated_at'] = now()->toDateTimeString();
+                        $apiCredentials['updated_manually'] = true;
+                    }
+                }
+            }
+
+            $updateData = [
                 'name' => $request->name,
                 'platform' => $request->platform,
                 'channel_id' => $request->channel_id,
@@ -210,10 +254,35 @@ class ChannelController extends Controller
                 'default_category' => $request->default_category,
                 'auto_upload' => $request->boolean('auto_upload'),
                 'is_active' => $request->boolean('is_active', true)
-            ]);
+            ];
+
+            // Only update api_credentials if it was modified
+            if ($channel->platform === 'tiktok' && (
+                $request->boolean('clear_tiktok_credentials') ||
+                $request->filled('tiktok_access_token') ||
+                $request->filled('tiktok_refresh_token') ||
+                $request->filled('tiktok_open_id')
+            )) {
+                $updateData['api_credentials'] = $apiCredentials;
+            }
+
+            $channel->update($updateData);
+
+            // Prepare success message
+            $successMessage = "Đã cập nhật kênh {$channel->name} thành công!";
+
+            if ($channel->platform === 'tiktok') {
+                if ($request->boolean('clear_tiktok_credentials')) {
+                    $successMessage .= " TikTok credentials đã được xóa.";
+                } elseif ($request->filled('tiktok_access_token') ||
+                         $request->filled('tiktok_refresh_token') ||
+                         $request->filled('tiktok_open_id')) {
+                    $successMessage .= " TikTok credentials đã được cập nhật.";
+                }
+            }
 
             return redirect()->route('admin.channels.show', $channel)
-                ->with('success', "Đã cập nhật kênh {$channel->name} thành công!");
+                ->with('success', $successMessage);
 
         } catch (\Exception $e) {
             return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage())
@@ -317,16 +386,17 @@ class ChannelController extends Controller
      */
     private function testTikTokConnection(Channel $channel)
     {
-        // Implementation for TikTok API test
-        // This would use TikTok's API to verify credentials
+        // Delegate to TikTokOAuthController for actual testing
+        $oauthController = app(\App\Http\Controllers\Admin\TikTokOAuthController::class);
+        $response = $oauthController->testConnection($channel);
+
+        if ($response instanceof \Illuminate\Http\JsonResponse) {
+            return $response->getData(true);
+        }
+
         return [
-            'success' => true,
-            'message' => 'Kết nối TikTok API thành công',
-            'data' => [
-                'platform' => 'TikTok',
-                'channel_id' => $channel->channel_id,
-                'username' => $channel->username
-            ]
+            'success' => false,
+            'message' => 'Không thể kiểm tra kết nối TikTok'
         ];
     }
 

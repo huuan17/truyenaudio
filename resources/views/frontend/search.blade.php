@@ -168,7 +168,7 @@
                             </div>
                             <div class="card-body">
                                 @php
-                                    $popularGenres = \App\Models\Genre::withCount('stories')
+                                    $popularGenres = \App\Models\Genre::public()->withCount('stories')
                                         ->having('stories_count', '>', 0)
                                         ->orderBy('stories_count', 'desc')
                                         ->limit(8)

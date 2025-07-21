@@ -111,7 +111,7 @@
                             <li><strong>Overlay:</strong> Video nhỏ ở góc phải dưới với bo góc tròn</li>
                             <li><strong>Audio:</strong> Được tăng âm lượng +20dB</li>
                             <li><strong>Thời gian:</strong> Quá trình có thể mất 2-5 phút tùy độ dài audio</li>
-                            <li><strong>Lưu trữ:</strong> File sẽ được lưu trong thư mục <code>storage/app/videos/{{ $story->folder_name }}/</code></li>
+                            <li><strong>Lưu trữ:</strong> File sẽ được lưu trong thư mục <code>storage/app/videos/generated/{{ $story->folder_name }}/</code></li>
                         </ul>
                     </div>
                 </div>

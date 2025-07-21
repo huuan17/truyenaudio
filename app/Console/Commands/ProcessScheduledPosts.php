@@ -144,9 +144,6 @@ class ProcessScheduledPosts extends Command
      */
     private function uploadToTikTok(ScheduledPost $post, Channel $channel)
     {
-        // TODO: Implement TikTok API upload
-        // Hiện tại chỉ simulate upload
-
         $this->line("    📱 Uploading to TikTok...");
 
         // Kiểm tra credentials
@@ -157,15 +154,88 @@ class ProcessScheduledPosts extends Command
             ];
         }
 
-        // Simulate upload process
-        sleep(2); // Simulate API call
+        try {
+            $tikTokService = app(\App\Services\TikTokApiService::class);
+            $credentials = $channel->api_credentials;
 
-        // Mock successful upload
-        return [
-            'success' => true,
-            'post_id' => 'tiktok_' . time() . '_' . $post->id,
-            'url' => 'https://tiktok.com/@' . ($channel->username ?: 'user') . '/video/' . time()
-        ];
+            // Kiểm tra token expiry và refresh nếu cần
+            if (isset($credentials['expires_at']) && now()->gt($credentials['expires_at'])) {
+                $this->line("    🔄 Refreshing TikTok token...");
+
+                $refreshResult = $tikTokService->refreshAccessToken($credentials['refresh_token']);
+
+                if (!$refreshResult['success']) {
+                    return [
+                        'success' => false,
+                        'error' => 'Không thể refresh TikTok token: ' . $refreshResult['error']
+                    ];
+                }
+
+                // Update credentials
+                $credentials['access_token'] = $refreshResult['access_token'];
+                $credentials['refresh_token'] = $refreshResult['refresh_token'];
+                $credentials['expires_in'] = $refreshResult['expires_in'];
+                $credentials['expires_at'] = now()->addSeconds($refreshResult['expires_in']);
+
+                $channel->update(['api_credentials' => $credentials]);
+                $this->line("    ✅ Token refreshed successfully");
+            }
+
+            // Kiểm tra file video tồn tại
+            $videoPath = storage_path('app/' . $post->video_path);
+            if (!file_exists($videoPath)) {
+                return [
+                    'success' => false,
+                    'error' => 'Video file không tồn tại: ' . $post->video_path
+                ];
+            }
+
+            $this->line("    📤 Uploading video: " . basename($videoPath));
+
+            // Tạo title và description
+            $title = $post->title ?: 'Video từ ' . config('app.name');
+            $description = $post->description ?: '';
+
+            // Thêm tags vào description nếu có
+            if (!empty($post->tags)) {
+                $hashtags = collect($post->tags)->map(function($tag) {
+                    return '#' . str_replace(' ', '', $tag);
+                })->implode(' ');
+                $description .= "\n\n" . $hashtags;
+            }
+
+            // Upload video
+            $uploadResult = $tikTokService->uploadVideo(
+                $credentials['access_token'],
+                $videoPath,
+                $title,
+                $description,
+                $this->mapPrivacyLevel($post->privacy)
+            );
+
+            if ($uploadResult['success']) {
+                $this->line("    ✅ Upload successful!");
+
+                return [
+                    'success' => true,
+                    'post_id' => $uploadResult['publish_id'],
+                    'url' => $uploadResult['share_url'] ?? null
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'error' => 'Upload failed: ' . $uploadResult['error']
+                ];
+            }
+
+        } catch (\Exception $e) {
+            $this->error("    ❌ Exception during TikTok upload: " . $e->getMessage());
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
     }
 
     /**
@@ -195,5 +265,22 @@ class ProcessScheduledPosts extends Command
             'post_id' => 'youtube_' . time() . '_' . $post->id,
             'url' => 'https://youtube.com/watch?v=' . strtoupper(substr(md5($post->id . time()), 0, 11))
         ];
+    }
+
+    /**
+     * Map privacy level từ app sang TikTok format
+     */
+    private function mapPrivacyLevel($privacy)
+    {
+        switch (strtolower($privacy)) {
+            case 'public':
+                return 'PUBLIC_TO_EVERYONE';
+            case 'private':
+                return 'SELF_ONLY';
+            case 'unlisted':
+                return 'MUTUAL_FOLLOW_FRIENDS';
+            default:
+                return 'PUBLIC_TO_EVERYONE';
+        }
     }
 }

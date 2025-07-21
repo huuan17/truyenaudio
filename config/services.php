@@ -36,5 +36,13 @@ return [
         'access_token' => env('VBEE_ACCESS_TOKEN'),
     ],
 
+    'tiktok' => [
+        'client_id' => env('TIKTOK_CLIENT_ID'),
+        'client_secret' => env('TIKTOK_CLIENT_SECRET'),
+        'redirect_uri' => env('TIKTOK_REDIRECT_URI'),
+        'sandbox' => env('TIKTOK_SANDBOX', true),
+        'api_version' => env('TIKTOK_API_VERSION', 'v2'),
+    ],
+
 ];
 

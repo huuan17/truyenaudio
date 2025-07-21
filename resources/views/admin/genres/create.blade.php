@@ -4,7 +4,7 @@
     <h1>Thêm thể loại</h1>
     <form action="{{ route('admin.genres.store') }}" method="POST">
         @csrf
-        @include('genres.form')
+        @include('admin.genres.form')
     </form>
 </div>
 @endsection

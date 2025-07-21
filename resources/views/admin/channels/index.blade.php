@@ -4,6 +4,14 @@
 
 @section('content')
 <div class="container-fluid">
+    <!-- Breadcrumb -->
+    <x-admin-breadcrumb :items="[
+        [
+            'title' => 'Quản lý Kênh',
+            'badge' => 'TikTok & YouTube'
+        ]
+    ]" />
+
     <div class="row">
         <div class="col-12">
             <div class="card">

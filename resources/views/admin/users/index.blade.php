@@ -1,18 +1,22 @@
 @extends('layouts.app')
 
-@section('title', 'Quản lý Users')
+@push('styles')
+<link rel="stylesheet" href="{{ asset('assets/css/sortable.css') }}">
+@endpush
+
+@section('title', 'Quản lý Người dùng')
 
 @section('content')
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Quản lý Users</h1>
+                <h1 class="m-0">Quản lý Người dùng</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Dashboard</a></li>
-                    <li class="breadcrumb-item active">Users</li>
+                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Bảng điều khiển</a></li>
+                    <li class="breadcrumb-item active">Người dùng</li>
                 </ol>
             </div>
         </div>
@@ -37,22 +41,52 @@
 
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">Danh sách Users</h3>
+                <h3 class="card-title">Danh sách Người dùng</h3>
                 <div class="card-tools">
                     <a href="{{ route('admin.users.create') }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-plus"></i> Thêm User
+                        <i class="fas fa-plus"></i> Thêm Người dùng
                     </a>
                 </div>
             </div>
+            <!-- Search Section -->
+            <div class="card-body border-bottom search-form">
+                <form method="GET" action="{{ route('admin.users.index') }}" class="d-flex align-items-center">
+                    <div class="form-group mb-0 mr-3">
+                        <label for="search" class="mr-2 mb-0">Tìm kiếm:</label>
+                        <input type="text"
+                               name="search"
+                               id="search"
+                               class="form-control"
+                               placeholder="Nhập tên hoặc email..."
+                               value="{{ request('search') }}"
+                               style="width: 300px;">
+                    </div>
+
+                    <!-- Preserve sort parameters -->
+                    <input type="hidden" name="sort" value="{{ request('sort', 'created_at') }}">
+                    <input type="hidden" name="direction" value="{{ request('direction', 'desc') }}">
+
+                    <button type="submit" class="btn btn-primary mr-2">
+                        <i class="fas fa-search"></i> Tìm kiếm
+                    </button>
+
+                    @if(request('search'))
+                        <a href="{{ route('admin.users.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Xóa bộ lọc
+                        </a>
+                    @endif
+                </form>
+            </div>
+
             <div class="card-body table-responsive p-0">
                 <table class="table table-hover text-nowrap">
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>Tên</th>
-                            <th>Email</th>
-                            <th>Vai trò</th>
-                            <th>Ngày tạo</th>
+                            <x-sortable-header route="admin.users.index" column="name" title="Tên" />
+                            <x-sortable-header route="admin.users.index" column="email" title="Email" />
+                            <x-sortable-header route="admin.users.index" column="role" title="Vai trò" />
+                            <x-sortable-header route="admin.users.index" column="created_at" title="Ngày tạo" />
                             <th>Thao tác</th>
                         </tr>
                     </thead>
@@ -101,7 +135,7 @@
             </div>
             @if ($users->hasPages())
                 <div class="card-footer clearfix">
-                    {{ $users->links('vendor.pagination.adminlte') }}
+                    {{ $users->appends(request()->query())->links('vendor.pagination.adminlte') }}
                 </div>
             @endif
         </div>

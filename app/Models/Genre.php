@@ -4,14 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
+use App\Helpers\SlugHelper;
 
 class Genre extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'slug'];
+    protected $fillable = ['name', 'slug', 'title', 'description', 'content', 'is_public'];
 
     public function stories()
     {
@@ -19,11 +19,29 @@ class Genre extends Model
     }
 
     /**
+     * Scope to get only public genres
+     */
+    public function scopePublic($query)
+    {
+        return $query->where('is_public', true);
+    }
+
+    /**
      * Generate slug from name
      */
     public function getSlugAttribute($value)
     {
-        return $value ?: Str::slug($this->name);
+        // If slug exists in database, return it
+        if ($value) {
+            return $value;
+        }
+
+        // If no slug and name exists, generate one
+        if ($this->name) {
+            return SlugHelper::createSlug($this->name);
+        }
+
+        return null;
     }
 
     /**
@@ -43,29 +61,13 @@ class Genre extends Model
 
         static::creating(function ($genre) {
             if (empty($genre->slug)) {
-                $genre->slug = Str::slug($genre->name);
-
-                // Ensure unique slug
-                $originalSlug = $genre->slug;
-                $counter = 1;
-                while (static::where('slug', $genre->slug)->exists()) {
-                    $genre->slug = $originalSlug . '-' . $counter;
-                    $counter++;
-                }
+                $genre->slug = SlugHelper::createUniqueSlug($genre->name, static::class);
             }
         });
 
         static::updating(function ($genre) {
             if ($genre->isDirty('name') && empty($genre->slug)) {
-                $genre->slug = Str::slug($genre->name);
-
-                // Ensure unique slug
-                $originalSlug = $genre->slug;
-                $counter = 1;
-                while (static::where('slug', $genre->slug)->where('id', '!=', $genre->id)->exists()) {
-                    $genre->slug = $originalSlug . '-' . $counter;
-                    $counter++;
-                }
+                $genre->slug = SlugHelper::createUniqueSlug($genre->name, static::class, $genre->id);
             }
         });
     }

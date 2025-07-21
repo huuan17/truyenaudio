@@ -72,6 +72,38 @@ class AppServiceProvider extends ServiceProvider
         Blade::directive('assetUrl', function ($expression) {
             return "<?php echo asset($expression); ?>";
         });
+
+        // Toast directives
+        Blade::directive('toastSuccess', function ($expression) {
+            return "<?php session()->flash('success', $expression); ?>";
+        });
+
+        Blade::directive('toastError', function ($expression) {
+            return "<?php session()->flash('error', $expression); ?>";
+        });
+
+        Blade::directive('toastWarning', function ($expression) {
+            return "<?php session()->flash('warning', $expression); ?>";
+        });
+
+        Blade::directive('toastInfo', function ($expression) {
+            return "<?php session()->flash('info', $expression); ?>";
+        });
+
+        // JavaScript toast directive
+        Blade::directive('jsToast', function ($expression) {
+            $parts = explode(',', str_replace(['(', ')'], '', $expression));
+            $type = trim($parts[0], '\'"');
+            $message = trim($parts[1] ?? '""', '\'"');
+            $title = trim($parts[2] ?? '""', '\'"');
+
+            return "
+            <script>
+                $(document).ready(function() {
+                    showToast.{$type}('{$message}'" . ($title ? ", '{$title}'" : '') . ");
+                });
+            </script>";
+        });
     }
 
     /**

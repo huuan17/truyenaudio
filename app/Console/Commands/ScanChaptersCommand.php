@@ -27,9 +27,9 @@ class ScanChaptersCommand extends Command
 
         $this->info("Bắt đầu quét chapter cho truyện: {$story->title}");
         
-        // Đường dẫn thư mục chứa file text
-        $textFolder = base_path($story->crawl_path);
-        
+        // Đường dẫn thư mục chứa file text - sử dụng storage_path
+        $textFolder = storage_path('app/content/' . $story->folder_name);
+
         if (!File::isDirectory($textFolder)) {
             $this->error("Thư mục không tồn tại: $textFolder");
             return 1;
@@ -91,17 +91,17 @@ class ScanChaptersCommand extends Command
             // Tạo tiêu đề chapter từ nội dung hoặc số chương
             $title = $this->extractChapterTitle($content, $chapterNumber);
 
+            // Calculate relative path for database storage
+            $relativePath = 'content/' . $story->folder_name . '/chuong-' . $chapterNumber . '.txt';
+
             // Chuẩn bị dữ liệu để lưu
             $chapterData = [
                 'title' => $title,
                 'is_crawled' => true,
-                'file_path' => $filePath
+                'file_path' => $relativePath,
+                'crawled_at' => now(),
+                'content' => $withContent ? $content : '', // Always set content, empty if not requested
             ];
-
-            // Chỉ lưu content nếu có option --with-content
-            if ($withContent) {
-                $chapterData['content'] = $content;
-            }
 
             if ($existingChapter) {
                 // Cập nhật chapter hiện có

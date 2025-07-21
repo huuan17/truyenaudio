@@ -18,6 +18,9 @@ yarn-error.log
 /.idea
 /.vscode
 
+# Database backups
+/storage/backups/*.sql
+
 # Audio-lara specific
 /storage/truyen/
 /storage/app/public/truyen/

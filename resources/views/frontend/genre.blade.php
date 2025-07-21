@@ -1,7 +1,7 @@
 @extends('layouts.frontend')
 
-@section('title', 'Thể loại ' . $genre->name . ' - Audio Lara')
-@section('description', 'Danh sách truyện audio thể loại ' . $genre->name . ' hay nhất tại Audio Lara')
+@section('title', ($genre->title ?: 'Thể loại ' . $genre->name) . ' - Audio Lara')
+@section('description', $genre->description ?: 'Danh sách truyện audio thể loại ' . $genre->name . ' hay nhất tại Audio Lara')
 
 @section('content')
 <div class="container py-4">
@@ -21,8 +21,11 @@
                     <div class="row align-items-center">
                         <div class="col-md-8">
                             <h1 class="h3 mb-2">
-                                <i class="fas fa-tag me-2 text-primary"></i>Thể loại: {{ $genre->name }}
+                                <i class="fas fa-tag me-2 text-primary"></i>{{ $genre->title ?: $genre->name }}
                             </h1>
+                            @if($genre->description)
+                                <p class="text-muted mb-2">{{ $genre->description }}</p>
+                            @endif
                             <p class="text-muted mb-0">
                                 Tổng cộng {{ $stories->total() }} truyện audio thể loại {{ $genre->name }}
                             </p>
@@ -54,6 +57,21 @@
             </div>
         </div>
     </div>
+
+    <!-- Genre Content -->
+    @if($genre->content)
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="content-text">
+                        {!! nl2br(e($genre->content)) !!}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
 
     <!-- Stories List -->
     <div class="row">
@@ -176,7 +194,7 @@
                 </div>
                 <div class="card-body">
                     @php
-                        $otherGenres = \App\Models\Genre::withCount('stories')
+                        $otherGenres = \App\Models\Genre::public()->withCount('stories')
                             ->where('id', '!=', $genre->id)
                             ->having('stories_count', '>', 0)
                             ->orderBy('stories_count', 'desc')

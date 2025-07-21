@@ -3,14 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Audio Lara - Nghe truyện audio miễn phí')</title>
-    <meta name="description" content="@yield('description', 'Trang nghe truyện audio online miễn phí với nhiều thể loại phong phú')">
+
+    @php
+        use App\Helpers\SettingHelper;
+        $seoTags = SettingHelper::getHomeSeoTags();
+        $siteInfo = SettingHelper::getSiteInfo();
+    @endphp
+
+    <title>@yield('title', $seoTags['title'])</title>
+    <meta name="description" content="@yield('meta_description', $seoTags['description'])">
+    <meta name="keywords" content="@yield('meta_keywords', $seoTags['keywords'])">
+
+    <!-- Meta Verification Tags -->
+    {!! SettingHelper::getMetaVerificationTags() !!}
     
-    <!-- Bootstrap CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- Google Fonts -->
+    <!-- Bootstrap CSS (Local) -->
+    <link href="{{ asset('assets/css/bootstrap-5.3.0.min.css') }}" rel="stylesheet">
+    <!-- Font Awesome (Local - Complete) -->
+    <link rel="stylesheet" href="{{ asset('assets/css/fontawesome-6.4.0-all.min.css') }}">
+    <!-- Icon Fallback CSS (for missing webfonts) -->
+    <link rel="stylesheet" href="{{ asset('assets/css/icon-fallback.css') }}">
+    <!-- Google Fonts (keep CDN for fonts) -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
@@ -173,20 +186,79 @@
             padding: 0.5rem;
         }
 
+        /* Icon Optimization - Remove harsh borders and make icons lighter */
+        .fas, .far, .fab {
+            font-weight: 400 !important; /* Lighter weight for all icons */
+            text-shadow: none !important; /* Remove any text shadows */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Specific icon styling for better visual appeal */
+        .fas.fa-book, .fas.fa-user, .fas.fa-list, .fas.fa-volume-up,
+        .fas.fa-info-circle, .fas.fa-clock, .fas.fa-tags, .fas.fa-book-open,
+        .fas.fa-forward, .fas.fa-align-left, .fas.fa-headphones,
+        .fas.fa-step-backward, .fas.fa-step-forward, .fas.fa-play-circle,
+        .fas.fa-file-alt, .fas.fa-chevron-right {
+            color: #6b7280 !important; /* Softer gray color */
+            opacity: 0.8;
+            transition: all 0.3s ease;
+        }
+
+        /* Icon hover effects */
+        .fas:hover, .far:hover, .fab:hover {
+            opacity: 1;
+            transform: scale(1.05);
+        }
+
+        /* Badge icons should be smaller and lighter */
+        .badge .fas {
+            font-size: 0.75em;
+            margin-right: 0.25rem;
+        }
+
+        /* Navigation icons */
+        .navbar .fas {
+            color: #4b5563 !important;
+            font-weight: 300 !important;
+        }
+
+        /* Button icons */
+        .btn .fas {
+            margin-right: 0.5rem;
+            font-size: 0.9em;
+        }
+
+        /* Card header icons */
+        .card-header .fas {
+            color: var(--primary-color) !important;
+            opacity: 0.7;
+        }
+
         @media (max-width: 768px) {
             .genre-grid {
                 grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
             }
-            
+
             .story-cover {
                 height: 150px;
+            }
+
+            /* Make icons smaller on mobile */
+            .fas, .far, .fab {
+                font-size: 0.9em;
             }
         }
     </style>
 
     @stack('styles')
+
+    <!-- Tracking Codes (Head) -->
+    {!! SettingHelper::getHeadTrackingCodes() !!}
 </head>
 <body>
+    <!-- Tracking Codes (Body) -->
+    {!! SettingHelper::getBodyTrackingCodes() !!}
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top">
         <div class="container">
@@ -212,13 +284,16 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('stories.recent') }}">Mới cập nhật</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('authors.index') }}">Tác giả</a>
+                    </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             Thể loại
                         </a>
                         <ul class="dropdown-menu">
                             @php
-                                $genres = \App\Models\Genre::withCount('stories')->having('stories_count', '>', 0)->orderBy('stories_count', 'desc')->limit(10)->get();
+                                $genres = \App\Models\Genre::public()->withCount('stories')->having('stories_count', '>', 0)->orderBy('stories_count', 'desc')->limit(10)->get();
                             @endphp
                             @foreach($genres as $genre)
                                 <li><a class="dropdown-item" href="{{ route('genre.show', $genre->slug) }}">{{ $genre->name }}</a></li>
@@ -273,8 +348,8 @@
         </div>
     </footer>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap JS (Local) -->
+    <script src="{{ asset('assets/js/bootstrap-5.3.0.bundle.min.js') }}"></script>
     
     @stack('scripts')
 </body>

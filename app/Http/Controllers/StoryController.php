@@ -29,7 +29,7 @@ class StoryController extends Controller
             'title'         => 'required|string|max:255',
             'slug'          => 'required|string|unique:stories,slug',
             'author'        => 'nullable|string|max:255',
-            'source_url'    => 'required|url',
+            'source_url'    => 'nullable|url',
             'start_chapter' => 'required|integer|min:1',
             'end_chapter'   => 'required|integer|min:1|gte:start_chapter',
         ]);
@@ -50,6 +50,10 @@ class StoryController extends Controller
         $story->crawl_status = $request->input('crawl_status', 0);
         $story->save();
         $story->genres()->sync($request->genres ?? []);
+
+        // Pre-create chapter files and storage directory
+        $this->preCreateChapterFiles($story);
+
         return redirect()->route('stories.index')->with('success', '✅ Thêm truyện thành công!');
     }
 
@@ -64,7 +68,7 @@ class StoryController extends Controller
         $request->validate([
             'title'         => 'required|string|max:255',
             'slug'          => 'required|string|unique:stories,slug,' . $story->id,
-            'source_url'    => 'required|url',
+            'source_url'    => 'nullable|url',
             'start_chapter' => 'required|integer|min:1',
             'end_chapter'   => 'required|integer|min:1|gte:start_chapter',
         ]);
@@ -100,68 +104,29 @@ class StoryController extends Controller
     {
         $query = Chapter::where('story_id', $story->id)->with('video');
 
-        // Filter theo audio status (legacy)
-        if ($request->filled('audio_status') && $request->audio_status !== 'all') {
-            $query->where('audio_status', $request->audio_status);
+        // Search theo tiêu đề chapter
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where('title', 'like', "%{$search}%");
         }
 
-        // Filter theo content type
-        if ($request->filled('content_type') && $request->content_type !== 'all') {
-            switch ($request->content_type) {
-                case 'text':
-                    // Chapters có nội dung text (trong DB hoặc file)
-                    $query->where(function($q) {
-                        $q->whereNotNull('content')
-                          ->where('content', '!=', '')
-                          ->orWhere(function($subQ) {
-                              $subQ->whereNotNull('file_path')
-                                   ->where('file_path', '!=', '');
-                          });
-                    });
-                    break;
+        // Sorting
+        $sortBy = $request->get('sort', 'chapter_number');
+        $sortDirection = $request->get('direction', 'asc');
 
-                case 'audio':
-                    // Chapters đã có audio
-                    $query->where('audio_status', 'done')
-                          ->whereNotNull('audio_file_path')
-                          ->where('audio_file_path', '!=', '');
-                    break;
-
-                case 'video':
-                    // Chapters đã có video
-                    $query->whereHas('video', function($q) {
-                        $q->where('render_status', 'done')
-                          ->whereNotNull('file_path')
-                          ->where('file_path', '!=', '');
-                    });
-                    break;
-
-                case 'no_content':
-                    // Chapters không có nội dung
-                    $query->where(function($q) {
-                        $q->where('content', '')
-                          ->orWhereNull('content');
-                    })->where(function($q) {
-                        $q->where('file_path', '')
-                          ->orWhereNull('file_path');
-                    });
-                    break;
-            }
+        // Validate sort parameters
+        $allowedSorts = ['chapter_number', 'title', 'created_at'];
+        if (!in_array($sortBy, $allowedSorts)) {
+            $sortBy = 'chapter_number';
         }
 
-        $chapters = $query->orderBy('chapter_number')->paginate(20);
+        if (!in_array($sortDirection, ['asc', 'desc'])) {
+            $sortDirection = 'asc';
+        }
 
-        // Thống kê trạng thái audio (legacy)
-        $statusCounts = Chapter::where('story_id', $story->id)
-            ->selectRaw('audio_status, COUNT(*) as count')
-            ->groupBy('audio_status')
-            ->pluck('count', 'audio_status')
-            ->toArray();
+        $chapters = $query->orderBy($sortBy, $sortDirection)->paginate(20);
 
-        // Thống kê content types
-        $contentTypeCounts = ChapterHelper::getContentTypeCounts($story->id);
-
-        return view('stories.chapters', compact('story', 'chapters', 'statusCounts', 'contentTypeCounts'));
+        return view('stories.chapters', compact('story', 'chapters'));
     }
 
     /**
@@ -253,9 +218,10 @@ class StoryController extends Controller
     {
         $voices = [
             'hn_female_ngochuyen_full_48k-fhg' => 'Ngọc Huyền (Nữ - Hà Nội)',
-            'hn_male_manhtung_full_48k-fhg' => 'Mạnh Tùng (Nam - Hà Nội)',
+            'hn_male_phuthang_stor80dt_48k-fhg' => 'Anh Khôi (Nam - Hà Nội)',
             'sg_female_thaotrinh_full_48k-fhg' => 'Thảo Trinh (Nữ - Sài Gòn)',
-            'sg_male_minhhoang_full_48k-fhg' => 'Minh Hoàng (Nam - Sài Gòn)'
+            'sg_male_minhhoang_full_48k-fhg' => 'Minh Hoàng (Nam - Sài Gòn)',
+            'sg_female_tuongvy_call_44k-fhg' => 'Tường Vy (Nữ - Sài Gòn)'
         ];
         
         return view('stories.tts', compact('story', 'voices'));
@@ -324,12 +290,7 @@ class StoryController extends Controller
             $chapter = $story->chapters()->where('chapter_number', $chapterNumber)->first();
             if ($chapter && $chapter->canConvertToTts()) {
                 try {
-                    Artisan::queue('vbee:chapter-tts', [
-                        '--chapter_id' => $chapter->id,
-                        '--voice' => $request->voice,
-                        '--bitrate' => $request->bitrate,
-                        '--speed' => $request->speed,
-                    ]);
+                    \App\Jobs\ProcessChapterTtsJob::dispatch($chapter->id, $request->voice, $request->bitrate, $request->speed, 1.0);
                     $successCount++;
                 } catch (\Exception $e) {
                     \Log::error("Failed to queue TTS for chapter {$chapterNumber}: " . $e->getMessage());
@@ -440,7 +401,7 @@ class StoryController extends Controller
         }
 
         if ($request->filled('overlay_file')) {
-            $overlayPath = storage_path('app/video_assets/' . $request->overlay_file);
+            $overlayPath = storage_path('app/videos/assets/' . $request->overlay_file);
             $params['--overlay'] = $overlayPath;
         }
 
@@ -448,8 +409,8 @@ class StoryController extends Controller
             $params['--output'] = $request->output_name;
         }
 
-        // Chạy command
-        Artisan::queue('video:generate', $params);
+        // Chạy command story video generation
+        Artisan::queue('story:video:generate', $params);
 
         $chapterText = $request->filled('chapter_number') ? " chương {$request->chapter_number}" : "";
         $message = "Đã bắt đầu tạo video{$chapterText} cho truyện '{$story->title}'. Quá trình này có thể mất vài phút.";
@@ -470,8 +431,8 @@ class StoryController extends Controller
             $originalName = $file->getClientOriginalName();
             $fileName = time() . '_' . $originalName;
 
-            // Lưu file vào thư mục video_assets
-            $overlayDir = storage_path('app/video_assets');
+            // Lưu file vào thư mục videos/assets
+            $overlayDir = storage_path('app/videos/assets');
             if (!File::isDirectory($overlayDir)) {
                 File::makeDirectory($overlayDir, 0755, true);
             }
@@ -531,8 +492,51 @@ class StoryController extends Controller
             ->orderBy('chapter_number', 'desc')
             ->take(5)
             ->get();
-            
+
         return view('stories.show', compact('story', 'chapterCount', 'latestChapters'));
+    }
+
+    /**
+     * Create storage directory for a story
+     * This prevents permission issues when Node.js script tries to create files
+     */
+    private function preCreateChapterFiles(Story $story)
+    {
+        try {
+            // Create storage directory only
+            $storageDir = storage_path('app/content/' . $story->folder_name);
+
+            if (!is_dir($storageDir)) {
+                if (mkdir($storageDir, 0755, true)) {
+                    \Log::info("Created storage directory for story: {$story->title}", [
+                        'story_id' => $story->id,
+                        'directory' => $storageDir,
+                        'permissions' => '0755'
+                    ]);
+                    return true;
+                } else {
+                    \Log::error("Failed to create storage directory for story: {$story->title}", [
+                        'story_id' => $story->id,
+                        'directory' => $storageDir
+                    ]);
+                    return false;
+                }
+            } else {
+                \Log::info("Storage directory already exists for story: {$story->title}", [
+                    'story_id' => $story->id,
+                    'directory' => $storageDir
+                ]);
+                return true;
+            }
+
+        } catch (\Exception $e) {
+            \Log::error("Error creating storage directory for story: {$story->title}", [
+                'story_id' => $story->id,
+                'error' => $e->getMessage(),
+                'stack' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
     }
 }
 

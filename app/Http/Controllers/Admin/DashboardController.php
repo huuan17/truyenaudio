@@ -21,7 +21,7 @@ class DashboardController extends Controller
             'total_stories' => Story::count(),
             'total_chapters' => Chapter::count(),
             'total_users' => User::count(),
-            'chapters_with_audio' => Chapter::whereNotNull('audio_file_path')->count(),
+            'chapters_with_audio' => Chapter::where('audio_status', 'done')->count(),
         ];
 
         return view('admin.dashboard.index', compact('stats'));

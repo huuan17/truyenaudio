@@ -334,33 +334,139 @@
                     </div>
                 </div>
 
-                <!-- API Status -->
+                <!-- API Configuration -->
                 <div class="card">
                     <div class="card-header">
                         <h4 class="card-title">
                             <i class="fas fa-key mr-2"></i>API Configuration
                         </h4>
                     </div>
-                    <div class="card-body text-center">
-                        @if($channel->hasValidCredentials())
-                            <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
-                            <h6 class="text-success">API Đã Cấu Hình</h6>
-                            <p class="text-muted">Credentials được mã hóa an toàn</p>
-                            <button class="btn btn-info btn-sm" onclick="testConnection({{ $channel->id }})">
-                                <i class="fas fa-plug mr-1"></i>Test Kết Nối
-                            </button>
-                        @else
-                            <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
-                            <h6 class="text-warning">Chưa Cấu Hình API</h6>
-                            <p class="text-muted">Cần cấu hình để upload video</p>
+                    <div class="card-body">
+                        @if($channel->platform === 'tiktok')
+                            <!-- TikTok OAuth Status -->
+                            <div class="mb-4">
+                                @if($channel->hasValidCredentials())
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle mr-2"></i>
+                                        <strong>Đã kết nối TikTok</strong>
+                                        <p class="mb-2">Kênh đã được authorize và sẵn sàng upload video.</p>
+
+                                        @if(isset($channel->api_credentials['user_info']))
+                                            @php $userInfo = $channel->api_credentials['user_info']; @endphp
+                                            <small class="text-muted">
+                                                👤 {{ $userInfo['display_name'] ?? 'N/A' }}
+                                                @if(isset($userInfo['username']))
+                                                    (@{{ $userInfo['username'] }})
+                                                @endif
+                                            </small>
+                                        @endif
+
+                                        <div class="mt-2">
+                                            <button type="button" class="btn btn-sm btn-info" onclick="testTikTokConnection({{ $channel->id }})">
+                                                <i class="fas fa-sync mr-1"></i>Test Connection
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-warning" onclick="refreshTikTokToken({{ $channel->id }})">
+                                                <i class="fas fa-refresh mr-1"></i>Refresh Token
+                                            </button>
+                                            <a href="{{ route('admin.channels.tiktok.authorize', ['channel_id' => $channel->id]) }}"
+                                               class="btn btn-sm btn-secondary">
+                                                <i class="fas fa-redo mr-1"></i>Re-authorize
+                                            </a>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                        <strong>Chưa kết nối TikTok</strong>
+                                        <p class="mb-2">Cần authorize với TikTok để có thể upload video tự động.</p>
+                                        <a href="{{ route('admin.channels.tiktok.authorize', ['channel_id' => $channel->id]) }}"
+                                           class="btn btn-primary">
+                                            <i class="fab fa-tiktok mr-2"></i>Kết nối TikTok
+                                        </a>
+                                    </div>
+                                @endif
+                            </div>
+
+                            <!-- Manual Token Input (Advanced) -->
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                        Cập Nhật Token Thủ Công (Nâng Cao)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle mr-2"></i>
+                                        <strong>Lưu ý:</strong> Chỉ sử dụng khi cần thiết. Khuyến nghị sử dụng OAuth flow ở trên.
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="tiktok_access_token">
+                                            <i class="fas fa-key mr-1"></i>Access Token
+                                        </label>
+                                        <input type="password" name="tiktok_access_token" id="tiktok_access_token"
+                                               class="form-control" placeholder="Nhập TikTok Access Token mới (để trống nếu không thay đổi)">
+                                        <small class="text-muted">
+                                            Để trống nếu không muốn thay đổi token hiện tại
+                                        </small>
+                                        @error('tiktok_access_token')
+                                            <div class="text-danger">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="tiktok_refresh_token">
+                                            <i class="fas fa-sync-alt mr-1"></i>Refresh Token
+                                        </label>
+                                        <input type="password" name="tiktok_refresh_token" id="tiktok_refresh_token"
+                                               class="form-control" placeholder="Nhập TikTok Refresh Token mới (để trống nếu không thay đổi)">
+                                        <small class="text-muted">
+                                            Để trống nếu không muốn thay đổi refresh token hiện tại
+                                        </small>
+                                        @error('tiktok_refresh_token')
+                                            <div class="text-danger">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="tiktok_open_id">
+                                            <i class="fas fa-user mr-1"></i>Open ID (User ID)
+                                        </label>
+                                        <input type="text" name="tiktok_open_id" id="tiktok_open_id"
+                                               class="form-control" placeholder="Nhập TikTok Open ID (để trống nếu không thay đổi)"
+                                               value="{{ old('tiktok_open_id', isset($channel->api_credentials['open_id']) ? $channel->api_credentials['open_id'] : '') }}">
+                                        <small class="text-muted">
+                                            ID người dùng TikTok được trả về từ OAuth
+                                        </small>
+                                        @error('tiktok_open_id')
+                                            <div class="text-danger">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-group">
+                                        <div class="form-check">
+                                            <input type="checkbox" name="clear_tiktok_credentials" id="clear_tiktok_credentials"
+                                                   class="form-check-input" value="1">
+                                            <label class="form-check-label text-danger" for="clear_tiktok_credentials">
+                                                <i class="fas fa-trash mr-1"></i>
+                                                Xóa tất cả TikTok credentials
+                                            </label>
+                                        </div>
+                                        <small class="text-muted">
+                                            Chọn để xóa hoàn toàn kết nối TikTok hiện tại
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
+                        @elseif($channel->platform === 'youtube')
+                            <!-- YouTube API (Future) -->
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>YouTube API</strong> sẽ được triển khai trong phiên bản tiếp theo.
+                            </div>
                         @endif
-                        
-                        <hr>
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            API credentials không hiển thị vì lý do bảo mật. 
-                            Liên hệ admin để cập nhật.
-                        </small>
                     </div>
                 </div>
 
@@ -503,6 +609,105 @@ function testConnection(channelId) {
         }
     });
 }
+
+// TikTok functions
+function testTikTokConnection(channelId) {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    $.ajax({
+        url: `/admin/channels/${channelId}/tiktok/test`,
+        method: 'POST',
+        data: {
+            _token: '{{ csrf_token() }}'
+        },
+        success: function(response) {
+            if (response.success) {
+                let message = '✅ ' + response.message;
+                if (response.data) {
+                    message += '\n\nThông tin kênh:';
+                    if (response.data.username) message += '\nUsername: ' + response.data.username;
+                    if (response.data.display_name) message += '\nDisplay Name: ' + response.data.display_name;
+                }
+                alert(message);
+            } else {
+                alert('❌ ' + response.error);
+            }
+        },
+        error: function() {
+            alert('❌ Có lỗi xảy ra khi test kết nối TikTok');
+        },
+        complete: function() {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+}
+
+function refreshTikTokToken(channelId) {
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    $.ajax({
+        url: `/admin/channels/${channelId}/tiktok/refresh`,
+        method: 'POST',
+        data: {
+            _token: '{{ csrf_token() }}'
+        },
+        success: function(response) {
+            if (response.success) {
+                alert('✅ ' + response.message);
+                location.reload(); // Reload để cập nhật thông tin
+            } else {
+                alert('❌ ' + response.error);
+            }
+        },
+        error: function() {
+            alert('❌ Có lỗi xảy ra khi refresh token');
+        },
+        complete: function() {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+}
+
+// Clear credentials checkbox handler
+document.addEventListener('DOMContentLoaded', function() {
+    const clearCheckbox = document.getElementById('clear_tiktok_credentials');
+    const tokenInputs = ['tiktok_access_token', 'tiktok_refresh_token', 'tiktok_open_id'];
+
+    if (clearCheckbox) {
+        clearCheckbox.addEventListener('change', function() {
+            tokenInputs.forEach(function(inputId) {
+                const input = document.getElementById(inputId);
+                if (input) {
+                    input.disabled = this.checked;
+                    if (this.checked) {
+                        input.value = '';
+                        input.placeholder = 'Sẽ được xóa khi lưu';
+                    } else {
+                        input.placeholder = input.getAttribute('data-original-placeholder') || '';
+                    }
+                }
+            }.bind(this));
+        });
+
+        // Store original placeholders
+        tokenInputs.forEach(function(inputId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.setAttribute('data-original-placeholder', input.placeholder);
+            }
+        });
+    }
+});
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {

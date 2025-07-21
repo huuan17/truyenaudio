@@ -2,6 +2,14 @@
 
 @section('content')
 <div class="container">
+    <!-- Breadcrumb -->
+    <x-admin-breadcrumb :items="[
+        [
+            'title' => 'Quản lý Thể loại',
+            'badge' => ($genres->count() ?? 0) . ' thể loại'
+        ]
+    ]" />
+
     <h1>Danh sách thể loại</h1>
 
     <a href="{{ route('admin.genres.create') }}" class="btn btn-primary mb-3">+ Thêm thể loại</a>
@@ -14,6 +22,8 @@
         <thead>
             <tr>
                 <th>Tên</th>
+                <th>Tiêu đề</th>
+                <th>Trạng thái</th>
                 <th>Ngày tạo</th>
                 <th>Hành động</th>
             </tr>
@@ -21,7 +31,20 @@
         <tbody>
             @foreach ($genres as $genre)
                 <tr>
-                    <td>{{ $genre->name }}</td>
+                    <td>
+                        <strong>{{ $genre->name }}</strong>
+                        @if($genre->description)
+                            <br><small class="text-muted">{{ Str::limit($genre->description, 50) }}</small>
+                        @endif
+                    </td>
+                    <td>{{ $genre->title ?: $genre->name }}</td>
+                    <td>
+                        @if($genre->is_public)
+                            <span class="badge bg-success">Công khai</span>
+                        @else
+                            <span class="badge bg-secondary">Ẩn</span>
+                        @endif
+                    </td>
                     <td>{{ $genre->created_at->format('d/m/Y') }}</td>
                     <td>
                         <a href="{{ route('admin.genres.edit', $genre) }}" class="btn btn-sm btn-warning">Sửa</a>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Story Update Form</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body>
+    <h1>Test Story Update Form</h1>
+    
+    <form action="http://localhost:8000/admin/stories/vo-thuong-sat-than" method="POST">
+        <input type="hidden" name="_token" value="test_token">
+        <input type="hidden" name="_method" value="PUT">
+        
+        <p>
+            <label>Title:</label><br>
+            <input type="text" name="title" value="Vô thượng sát thần" required>
+        </p>
+        
+        <p>
+            <label>Slug:</label><br>
+            <input type="text" name="slug" value="vo-thuong-sat-than" required>
+        </p>
+        
+        <p>
+            <label>Author:</label><br>
+            <input type="text" name="author" value="Test Author">
+        </p>
+        
+        <p>
+            <label>Source URL:</label><br>
+            <input type="url" name="source_url" value="https://truyencom.com/vo-thuong-sat-than/chuong-" required>
+        </p>
+        
+        <p>
+            <label>Start Chapter:</label><br>
+            <input type="number" name="start_chapter" value="1" min="1" required>
+        </p>
+        
+        <p>
+            <label>End Chapter:</label><br>
+            <input type="number" name="end_chapter" value="5" min="1" required>
+        </p>
+        
+        <p>
+            <button type="submit">Update Story</button>
+        </p>
+    </form>
+    
+    <hr>
+    
+    <h2>Debug Info</h2>
+    <p><strong>Form Action:</strong> http://localhost:8000/admin/stories/vo-thuong-sat-than</p>
+    <p><strong>Method:</strong> POST with _method=PUT</p>
+    <p><strong>Expected Route:</strong> admin.stories.update</p>
+    <p><strong>Controller:</strong> Admin\StoryController@update</p>
+    
+    <h3>Troubleshooting</h3>
+    <ul>
+        <li>Check if route exists: <code>php artisan route:list --name=stories.update</code></li>
+        <li>Check controller method exists</li>
+        <li>Check CSRF token is valid</li>
+        <li>Check form data validation</li>
+        <li>Check Laravel logs for errors</li>
+    </ul>
+</body>
+</html>

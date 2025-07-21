@@ -9,4 +9,4 @@
 </div>
 
 <button type="submit" class="btn btn-success">Lưu</button>
-<a href="{{ route('genres.index') }}" class="btn btn-secondary">Quay lại</a>
+<a href="{{ route('admin.genres.index') }}" class="btn btn-secondary">Quay lại</a>

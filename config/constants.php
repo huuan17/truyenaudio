@@ -5,29 +5,69 @@ return [
     'CRAWL_STATUS' => [
         'VALUES' => [
             'NOT_CRAWLED' => 0,
-            'CRAWLED'     => 1,
-            'RE_CRAWL'    => 2,
+            'PENDING'     => 1,
+            'CRAWLED'     => 2,
+            'CRAWLING'    => 3,
+            'FAILED'      => 4,
+            'RE_CRAWL'    => 5,
         ],
 
         // Mapping từ giá trị => nhãn hiển thị
         'LABELS' => [
             0 => 'Chưa crawl',
-            1 => 'Đã crawl',
-            2 => 'Cần crawl lại',
+            1 => 'Đang chờ',
+            2 => 'Đã crawl',
+            3 => 'Đang crawl',
+            4 => 'Thất bại',
+            5 => 'Cần crawl lại',
         ],
 
         // Mapping từ giá trị => class màu (ví dụ để badge bootstrap)
         'COLORS' => [
             0 => 'secondary',
-            1 => 'success',
-            2 => 'warning',
+            1 => 'primary',
+            2 => 'success',
+            3 => 'info',
+            4 => 'danger',
+            5 => 'warning',
         ]
     ],
-    
+
+    'TTS_STATUS' => [
+        'VALUES' => [
+            'NOT_STARTED' => 0,
+            'PENDING'     => 1,
+            'PROCESSING'  => 2,
+            'COMPLETED'   => 3,
+            'FAILED'      => 4,
+            'PARTIAL'     => 5,
+        ],
+
+        'LABELS' => [
+            0 => 'Chưa TTS',
+            1 => 'Chờ TTS',
+            2 => 'Đang TTS',
+            3 => 'Hoàn thành',
+            4 => 'Thất bại',
+            5 => 'Một phần',
+        ],
+
+        'COLORS' => [
+            0 => 'secondary',
+            1 => 'warning',
+            2 => 'info',
+            3 => 'success',
+            4 => 'danger',
+            5 => 'primary',
+        ]
+    ],
+
     'STORAGE_PATHS' => [
-        'TEXT' => 'storage/truyen/',
-        'AUDIO' => 'storage/truyen/mp3-',
-        'VIDEO' => 'storage/truyen/mp4-',
+        'TEXT' => 'storage/app/content/',
+        'AUDIO' => 'storage/app/audio/',
+        'VIDEO' => 'storage/app/videos/',
+        'IMAGES' => 'storage/app/images/',
+        'TEMP' => 'storage/app/temp/',
     ],
 ];/** 
  * sử dụng trong Controller

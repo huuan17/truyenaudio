@@ -121,11 +121,25 @@ class ChapterController extends Controller
      */
     public function convertToTts(Request $request, Chapter $chapter)
     {
+        // Sử dụng default settings từ story nếu không có trong request
+        $story = $chapter->story;
+        $defaultVoice = $story->default_tts_voice ?? 'hn_female_ngochuyen_full_48k-fhg';
+        $defaultBitrate = $story->default_tts_bitrate ?? 128;
+        $defaultSpeed = $story->default_tts_speed ?? 1.0;
+        $defaultVolume = $story->default_tts_volume ?? 1.0;
+
         $request->validate([
-            'voice' => 'required|string',
-            'bitrate' => 'required|numeric|in:64,128,192,256,320',
-            'speed' => 'required|numeric|between:0.5,2.0',
+            'voice' => 'nullable|string',
+            'bitrate' => 'nullable|numeric|in:64,128,192,256,320',
+            'speed' => 'nullable|numeric|in:0.5,1.0,1.5,2.0',
+            'volume' => 'nullable|numeric|in:1.0,1.5,2.0',
         ]);
+
+        // Sử dụng giá trị từ request hoặc default từ story
+        $voice = $request->input('voice', $defaultVoice);
+        $bitrate = $request->input('bitrate', $defaultBitrate);
+        $speed = $request->input('speed', $defaultSpeed);
+        $volume = $request->input('volume', $defaultVolume);
 
         // Kiểm tra xem chapter có thể chuyển đổi không
         if (!$chapter->canConvertToTts()) {
@@ -138,14 +152,9 @@ class ChapterController extends Controller
             return back()->with('error', $message);
         }
 
-        // Chạy command TTS
+        // Chạy command TTS với settings đã xử lý
         try {
-            Artisan::queue('vbee:chapter-tts', [
-                '--chapter_id' => $chapter->id,
-                '--voice' => $request->voice,
-                '--bitrate' => $request->bitrate,
-                '--speed' => $request->speed,
-            ]);
+            \App\Jobs\ProcessChapterTtsJob::dispatchSync($chapter->id, $voice, $bitrate, $speed, $volume);
 
             $message = "Đã bắt đầu chuyển đổi chapter {$chapter->chapter_number} thành audio.";
 
@@ -170,12 +179,25 @@ class ChapterController extends Controller
      */
     public function convertAllToTts(Request $request, Story $story)
     {
+        // Sử dụng default settings từ story nếu không có trong request
+        $defaultVoice = $story->default_tts_voice ?? 'hn_female_ngochuyen_full_48k-fhg';
+        $defaultBitrate = $story->default_tts_bitrate ?? 128;
+        $defaultSpeed = $story->default_tts_speed ?? 1.0;
+        $defaultVolume = $story->default_tts_volume ?? 1.0;
+
         $request->validate([
-            'voice' => 'required|string',
-            'bitrate' => 'required|numeric|in:64,128,192,256,320',
-            'speed' => 'required|numeric|between:0.5,2.0',
+            'voice' => 'nullable|string',
+            'bitrate' => 'nullable|numeric|in:64,128,192,256,320',
+            'speed' => 'nullable|numeric|in:0.5,1.0,1.5,2.0',
+            'volume' => 'nullable|numeric|in:1.0,1.5,2.0',
             'only_pending' => 'boolean',
         ]);
+
+        // Sử dụng giá trị từ request hoặc default từ story
+        $voice = $request->input('voice', $defaultVoice);
+        $bitrate = $request->input('bitrate', $defaultBitrate);
+        $speed = $request->input('speed', $defaultSpeed);
+        $volume = $request->input('volume', $defaultVolume);
 
         // Đếm số chapters có thể chuyển đổi
         $query = $story->chapters();
@@ -192,14 +214,13 @@ class ChapterController extends Controller
             return back()->with('error', 'Không có chapter nào để chuyển đổi.');
         }
 
-        // Chạy command TTS cho tất cả chapters
+        // Chạy command TTS cho tất cả chapters với settings đã xử lý
         try {
-            Artisan::queue('vbee:chapter-tts', [
-                '--story_id' => $story->id,
-                '--voice' => $request->voice,
-                '--bitrate' => $request->bitrate,
-                '--speed' => $request->speed,
-            ]);
+            // Queue TTS job for each chapter individually
+            $chapters = $story->chapters()->whereNull('audio_file_path')->get();
+            foreach ($chapters as $chapter) {
+                \App\Jobs\ProcessChapterTtsJob::dispatch($chapter->id, $voice, $bitrate, $speed, $volume);
+            }
 
             $message = $request->only_pending
                 ? "Đã bắt đầu chuyển đổi {$chaptersCount} chapter(s) chưa xử lý của truyện '{$story->title}' thành audio."

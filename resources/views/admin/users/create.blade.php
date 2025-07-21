@@ -1,18 +1,18 @@
 @extends('layouts.app')
 
-@section('title', 'Thêm User')
+@section('title', 'Thêm Người dùng')
 
 @section('content')
 <div class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1 class="m-0">Thêm User</h1>
+                <h1 class="m-0">Thêm Người dùng</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
-                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('admin.users.index') }}">Users</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Bảng điều khiển</a></li>
+                    <li class="breadcrumb-item"><a href="{{ route('admin.users.index') }}">Người dùng</a></li>
                     <li class="breadcrumb-item active">Thêm</li>
                 </ol>
             </div>
@@ -26,7 +26,7 @@
             <div class="col-md-8">
                 <div class="card card-primary">
                     <div class="card-header">
-                        <h3 class="card-title">Thông tin User</h3>
+                        <h3 class="card-title">Thông tin Người dùng</h3>
                     </div>
                     <form action="{{ route('admin.users.store') }}" method="POST">
                         @csrf

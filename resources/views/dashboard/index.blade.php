@@ -99,7 +99,7 @@
                                 </a>
                             </div>
                             <div class="col-md-3">
-                                <a href="{{ route('genres.create') }}" class="btn btn-success btn-block">
+                                <a href="{{ route('admin.genres.create') }}" class="btn btn-success btn-block">
                                     <i class="fas fa-tags"></i> Thêm thể loại
                                 </a>
                             </div>

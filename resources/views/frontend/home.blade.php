@@ -64,7 +64,7 @@
             <div class="card text-center">
                 <div class="card-body">
                     <i class="fas fa-tags fa-2x text-info mb-2"></i>
-                    <h4 class="fw-bold">{{ \App\Models\Genre::count() }}</h4>
+                    <h4 class="fw-bold">{{ \App\Models\Genre::public()->count() }}</h4>
                     <p class="text-muted mb-0">Thể loại</p>
                 </div>
             </div>

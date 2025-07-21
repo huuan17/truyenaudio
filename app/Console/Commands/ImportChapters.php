@@ -21,7 +21,7 @@ class ImportChapters extends Command
             return 1;
         }
 
-        $folderPath = storage_path("truyen/{$story->slug}");
+        $folderPath = storage_path("app/content/{$story->folder_name}");
 
         if (!File::isDirectory($folderPath)) {
             $this->error("❌ Thư mục không tồn tại: $folderPath");
@@ -47,11 +47,17 @@ class ImportChapters extends Command
 
             $content = File::get($file->getPathname());
 
+            // Calculate relative file path
+            $relativePath = 'content/' . $story->folder_name . '/chuong-' . $chapterNumber . '.txt';
+
             Chapter::create([
                 'story_id' => $story->id,
                 'title' => "Chương $chapterNumber",
                 'chapter_number' => $chapterNumber,
                 'content' => $content,
+                'file_path' => $relativePath,
+                'is_crawled' => true,
+                'crawled_at' => now(),
             ]);
 
             $this->info("✅ Nhập chương $chapterNumber");

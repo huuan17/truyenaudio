@@ -1,0 +1,240 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Dropdown Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; background: #f8f9fa; }
+        .test-section { 
+            background: white; 
+            padding: 20px; 
+            margin: 20px 0; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .navbar-test { 
+            background: #343a40; 
+            padding: 10px 20px; 
+            border-radius: 8px;
+        }
+        
+        /* Copy exact CSS from layout */
+        .navbar-nav .dropdown-menu {
+            position: absolute !important;
+            z-index: 9999 !important;
+            display: none !important;
+            min-width: 200px !important;
+            background-color: #fff !important;
+            border: 1px solid rgba(0,0,0,.15) !important;
+            border-radius: 0.375rem !important;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175) !important;
+            margin-top: 0.125rem !important;
+            top: 100% !important;
+            left: auto !important;
+        }
+        
+        .navbar-nav .dropdown-menu.show {
+            display: block !important;
+        }
+        
+        .navbar-nav .dropdown-menu-right {
+            right: 0 !important;
+            left: auto !important;
+        }
+        
+        .navbar-nav .dropdown-item {
+            display: block !important;
+            width: 100% !important;
+            padding: 0.375rem 1rem !important;
+            color: #212529 !important;
+            text-decoration: none !important;
+            background-color: transparent !important;
+            border: 0 !important;
+            cursor: pointer !important;
+        }
+        
+        .navbar-nav .dropdown-item:hover {
+            color: #16181b !important;
+            background-color: #f8f9fa !important;
+        }
+        
+        .debug-visible .dropdown-menu {
+            display: block !important;
+            position: static !important;
+            border: 2px solid #007bff !important;
+            margin: 10px 0 !important;
+        }
+        
+        .debug-info {
+            background: #e9ecef;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-section">
+        <h3>Dropdown CSS Test</h3>
+        <div class="navbar-test">
+            <nav class="navbar navbar-expand-lg navbar-dark">
+                <div class="navbar-nav ml-auto">
+                    <li class="nav-item dropdown" id="test-dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" 
+                           data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-user"></i> Test User <i class="fas fa-caret-down"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right">
+                            <div class="dropdown-header">
+                                <strong>Test User</strong><br>
+                                <small class="text-muted">test@example.com</small>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item" href="#">
+                                <i class="fas fa-user mr-2"></i> Profile
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item text-danger">
+                                <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                            </button>
+                        </div>
+                    </li>
+                </div>
+            </nav>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h5>Debug Controls</h5>
+        <button class="btn btn-primary" onclick="toggleDropdown()">Toggle Dropdown</button>
+        <button class="btn btn-secondary" onclick="showDebugInfo()">Show Debug Info</button>
+        <button class="btn btn-warning" onclick="makeVisible()">Force Visible</button>
+        <button class="btn btn-info" onclick="testZIndex()">Test Z-Index</button>
+        <button class="btn btn-success" onclick="copyToClipboard()">Copy Debug Code</button>
+    </div>
+    
+    <div id="debug-output" class="test-section" style="display: none;">
+        <h6>Debug Information:</h6>
+        <div id="debug-content" class="debug-info"></div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            console.log("=== ENHANCED DROPDOWN TEST ===");
+            
+            // Initialize Bootstrap dropdown
+            $(".dropdown-toggle").dropdown();
+            
+            // Enhanced click handler (copy from layout)
+            $(".dropdown-toggle").on("click", function(e) {
+                e.preventDefault();
+                console.log("Dropdown clicked");
+                
+                var $toggle = $(this);
+                var $menu = $toggle.next(".dropdown-menu");
+                
+                console.log("Debug info:", {
+                    "Menu found": $menu.length > 0,
+                    "Menu display": $menu.css("display"),
+                    "Menu z-index": $menu.css("z-index"),
+                    "Menu position": $menu.css("position"),
+                    "Menu visibility": $menu.is(":visible")
+                });
+                
+                $(".dropdown-menu").not($menu).removeClass("show").hide();
+                
+                if ($menu.hasClass("show") || $menu.is(":visible")) {
+                    $menu.removeClass("show").hide();
+                    $toggle.attr("aria-expanded", "false");
+                } else {
+                    $menu.addClass("show").show();
+                    $toggle.attr("aria-expanded", "true");
+                }
+            });
+            
+            // Click outside to close
+            $(document).on("click", function(e) {
+                if (!$(e.target).closest(".dropdown").length) {
+                    $(".dropdown-menu").removeClass("show").hide();
+                    $(".dropdown-toggle").attr("aria-expanded", "false");
+                }
+            });
+        });
+        
+        function toggleDropdown() {
+            $(".dropdown-menu").toggle();
+        }
+        
+        function showDebugInfo() {
+            var $menu = $(".dropdown-menu");
+            var info = {
+                "Element found": $menu.length,
+                "Display": $menu.css("display"),
+                "Position": $menu.css("position"),
+                "Z-index": $menu.css("z-index"),
+                "Top": $menu.css("top"),
+                "Right": $menu.css("right"),
+                "Width": $menu.css("width"),
+                "Height": $menu.css("height"),
+                "Visibility": $menu.css("visibility"),
+                "Opacity": $menu.css("opacity"),
+                "Has show class": $menu.hasClass("show"),
+                "Is visible": $menu.is(":visible"),
+                "Computed styles": window.getComputedStyle($menu[0])
+            };
+            
+            $("#debug-content").html("<pre>" + JSON.stringify(info, null, 2) + "</pre>");
+            $("#debug-output").show();
+        }
+        
+        function makeVisible() {
+            $("#test-dropdown").addClass("debug-visible");
+            $(".dropdown-menu").show();
+        }
+        
+        function testZIndex() {
+            var $menu = $(".dropdown-menu");
+            $menu.css("z-index", "99999");
+            $menu.css("background-color", "yellow");
+            $menu.show();
+            alert("Z-index set to 99999 and background to yellow");
+        }
+        
+        function copyToClipboard() {
+            var debugCode = `
+// Paste this in browser console on admin page
+window.debugDropdown = function() {
+    console.log("=== DROPDOWN DEBUG ===");
+    $(".dropdown-toggle").each(function(i) {
+        var $toggle = $(this);
+        var $menu = $toggle.next(".dropdown-menu");
+        console.log("Dropdown " + (i+1) + ":", {
+            "Toggle classes": $toggle.attr("class"),
+            "Menu classes": $menu.attr("class"),
+            "Menu styles": {
+                "display": $menu.css("display"),
+                "position": $menu.css("position"),
+                "z-index": $menu.css("z-index"),
+                "top": $menu.css("top"),
+                "right": $menu.css("right")
+            }
+        });
+    });
+};
+debugDropdown();
+            `;
+            
+            navigator.clipboard.writeText(debugCode).then(function() {
+                alert("Debug code copied to clipboard!");
+            });
+        }
+    </script>
+</body>
+</html>

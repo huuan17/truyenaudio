@@ -1,0 +1,345 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+    <!-- Breadcrumb -->
+    <x-admin-breadcrumb :items="[
+        [
+            'title' => 'Quản lý Truyện',
+            'badge' => ($stories->total() ?? 0) . ' truyện'
+        ]
+    ]" />
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>📚 Danh sách truyện</h2>
+        <a href="{{ route('admin.stories.create') }}" class="btn btn-primary">
+            <i class="fas fa-plus mr-1"></i>Thêm truyện
+        </a>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="btn-group" role="group">
+                        <a href="{{ route('admin.stories.index') }}"
+                           class="btn btn-outline-secondary {{ !request('filter') ? 'active' : '' }}">
+                            <i class="fas fa-list mr-1"></i>Tất cả ({{ $totalCount ?? $stories->total() }})
+                        </a>
+                        <a href="{{ route('admin.stories.index', ['filter' => 'visible']) }}"
+                           class="btn btn-outline-success {{ request('filter') == 'visible' ? 'active' : '' }}">
+                            <i class="fas fa-eye mr-1"></i>Hiển thị ({{ $visibleCount ?? 0 }})
+                        </a>
+                        <a href="{{ route('admin.stories.index', ['filter' => 'hidden']) }}"
+                           class="btn btn-outline-warning {{ request('filter') == 'hidden' ? 'active' : '' }}">
+                            <i class="fas fa-eye-slash mr-1"></i>Ẩn ({{ $hiddenCount ?? 0 }})
+                        </a>
+                        <a href="{{ route('admin.stories.index', ['filter' => 'inactive']) }}"
+                           class="btn btn-outline-danger {{ request('filter') == 'inactive' ? 'active' : '' }}">
+                            <i class="fas fa-pause mr-1"></i>Tạm dừng ({{ $inactiveCount ?? 0 }})
+                        </a>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <form method="GET" class="d-flex">
+                        <input type="hidden" name="filter" value="{{ request('filter') }}">
+                        <input type="text" name="search" class="form-control" placeholder="Tìm kiếm truyện..."
+                               value="{{ request('search') }}">
+                        <button type="submit" class="btn btn-outline-primary ml-2">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Tiêu đề</th>
+                <th>Tác giả</th>
+                <th>Slug</th>
+                <th>Chương</th>
+                <th>Crawl Management</th>
+                <th>Hiển thị</th>
+                <th>Hành động</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($stories as $story)
+            <tr>
+                <td>
+                    <div>
+                        <strong>{{ $story->title }}</strong>
+                    </div>
+                </td>
+                <td>
+                    @if($story->author_id && $story->authorModel)
+                        <a href="{{ route('admin.authors.show', $story->authorModel) }}"
+                           class="text-decoration-none">
+                            {{ $story->authorModel->name }}
+                        </a>
+                    @elseif($story->author)
+                        <span class="text-muted">{{ $story->author }}</span>
+                        <br><small class="text-warning">Chưa liên kết</small>
+                    @else
+                        <span class="text-muted">Chưa có</span>
+                    @endif
+                </td>
+                <td>
+                    <code>{{ $story->slug }}</code>
+                </td>
+                <td>
+                    <strong>{{ $story->start_chapter }} → {{ $story->end_chapter }}</strong>
+                    <br>
+                    <small class="text-muted">({{ $story->end_chapter - $story->start_chapter + 1 }} chương)</small>
+                </td>
+                <td>
+                    @php
+                        $statusLabels = config('constants.CRAWL_STATUS.LABELS');
+                        $statusColors = config('constants.CRAWL_STATUS.COLORS');
+                        $statusLabel = $statusLabels[$story->crawl_status] ?? 'Unknown';
+                        $statusColor = $statusColors[$story->crawl_status] ?? 'secondary';
+                    @endphp
+
+                    <!-- Status Badge -->
+                    <div class="mb-2">
+                        <span class="badge badge-{{ $statusColor }} crawl-status" data-story-id="{{ $story->id }}">
+                            {{ $statusLabel }}
+                        </span>
+                        <span class="btn btn-sm btn-outline-info pending-info ml-1" data-story-id="{{ $story->id }}" title="Jobs đang chờ">
+                            <i class="fas fa-clock"></i> <span class="pending-count">0</span>
+                        </span>
+                    </div>
+
+                    <!-- Chapter Info -->
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <strong>DB:</strong> <span class="chapter-count" data-story-id="{{ $story->id }}">{{ $story->chapters()->count() }}</span> / {{ $story->end_chapter - $story->start_chapter + 1 }}
+                        </small>
+                    </div>
+
+                    <!-- Crawl Actions -->
+                    <div class="btn-group-vertical crawl-actions" role="group" data-story-id="{{ $story->id }}" style="width: 100%;">
+                        @if($story->crawl_status == config('constants.CRAWL_STATUS.VALUES.NOT_CRAWLED') || $story->crawl_status == config('constants.CRAWL_STATUS.VALUES.RE_CRAWL'))
+                            <!-- Smart Crawl Button -->
+                            <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST" style="display: inline;">
+                                @csrf
+                                <button type="submit" class="btn btn-sm btn-success btn-block" title="Crawl chương thiếu">
+                                    <i class="fas fa-download"></i> Smart Crawl
+                                </button>
+                            </form>
+                        @elseif($story->crawl_status == config('constants.CRAWL_STATUS.VALUES.CRAWLING'))
+                            <!-- Cancel & Remove Buttons -->
+                            <div class="btn-group mb-1" role="group" style="width: 100%;">
+                                <form action="{{ route('admin.stories.cancel-crawl', $story) }}" method="POST" style="display: inline; flex: 1;">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-warning" style="width: 100%;"
+                                            onclick="return confirm('Bạn có chắc muốn hủy crawl?')" title="Hủy crawl">
+                                        <i class="fas fa-stop"></i> Cancel
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="btn-group" role="group" style="width: 100%;">
+                                <form action="{{ route('admin.stories.remove-from-queue', $story) }}" method="POST" style="display: inline; flex: 1;">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm btn-danger" style="width: 100%;"
+                                            onclick="return confirm('Bạn có chắc muốn xóa khỏi queue?')" title="Xóa khỏi queue">
+                                        <i class="fas fa-times"></i> Remove Queue
+                                    </button>
+                                </form>
+                            </div>
+                        @else
+                            <!-- Re-crawl Button -->
+                            <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST" style="display: inline;">
+                                @csrf
+                                <button type="submit" class="btn btn-sm btn-outline-success btn-block" title="Crawl lại chương thiếu">
+                                    <i class="fas fa-redo"></i> Re-crawl Missing
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                </td>
+                <td>
+                    <span class="badge {{ $story->visibility_badge_class }}">
+                        {{ $story->visibility_status }}
+                    </span>
+                    <div class="mt-1">
+                        @if($story->is_public)
+                            <small class="text-success"><i class="fas fa-eye"></i> Public</small>
+                        @else
+                            <small class="text-muted"><i class="fas fa-eye-slash"></i> Private</small>
+                        @endif
+                        |
+                        @if($story->is_active)
+                            <small class="text-success"><i class="fas fa-power-off"></i> Active</small>
+                        @else
+                            <small class="text-danger"><i class="fas fa-pause"></i> Inactive</small>
+                        @endif
+                    </div>
+                </td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <a href="{{ route('admin.stories.show', $story) }}" class="btn btn-sm btn-info" title="Xem chi tiết">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{{ route('admin.stories.edit', $story) }}" class="btn btn-sm btn-primary" title="Chỉnh sửa">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <form action="{{ route('admin.stories.destroy', $story) }}" method="POST" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa truyện này?')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-sm btn-danger" title="Xóa truyện">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+
+    {{ $stories->links() }}
+</div>
+
+@push('scripts')
+<script>
+// Real-time status and chapter count updates
+function updateStoryStatus() {
+    const storyIds = [];
+    document.querySelectorAll('.crawl-status[data-story-id]').forEach(element => {
+        storyIds.push(element.getAttribute('data-story-id'));
+    });
+
+    if (storyIds.length === 0) return;
+
+    fetch('{{ route("admin.stories.status") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({ story_ids: storyIds })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            data.stories.forEach(story => {
+                // Update crawl status
+                const statusElement = document.querySelector(`.crawl-status[data-story-id="${story.id}"]`);
+                if (statusElement) {
+                    statusElement.textContent = story.status_label;
+                    statusElement.className = `badge badge-${story.status_color} crawl-status`;
+                    statusElement.setAttribute('data-story-id', story.id);
+
+                    // Cancel button logic is now handled in updateCrawlActions
+                }
+
+                // Update chapter count
+                const countElement = document.querySelector(`.chapter-count[data-story-id="${story.id}"]`);
+                if (countElement) {
+                    countElement.textContent = story.chapter_count;
+                }
+
+                // Update crawl actions based on status
+                updateCrawlActions(story);
+
+                // Update pending jobs count
+                updatePendingJobsCount(story.id, data.pending_jobs ? data.pending_jobs[story.id] || 0 : 0);
+            });
+        }
+    })
+    .catch(error => {
+        console.log('Status update error:', error);
+    });
+}
+
+// Helper function to update crawl actions
+function updateCrawlActions(story) {
+    const actionsDiv = document.querySelector(`.crawl-actions[data-story-id="${story.id}"]`);
+    if (!actionsDiv) return;
+
+    let actionsHtml = '';
+
+    if (story.crawl_status == 0 || story.crawl_status == 2) { // NOT_CRAWLED or RE_CRAWL
+        actionsHtml = `
+            <form action="/admin/stories/${story.id}/smart-crawl" method="POST" style="display: inline;">
+                <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                <button type="submit" class="btn btn-sm btn-success btn-block" title="Crawl chương thiếu">
+                    <i class="fas fa-download"></i> Smart Crawl
+                </button>
+            </form>
+        `;
+    } else if (story.crawl_status == 3) { // CRAWLING
+        actionsHtml = `
+            <div class="btn-group mb-1" role="group" style="width: 100%;">
+                <form action="/admin/stories/${story.id}/cancel-crawl" method="POST" style="display: inline; flex: 1;">
+                    <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                    <button type="submit" class="btn btn-sm btn-warning" style="width: 100%;"
+                            onclick="return confirm('Bạn có chắc muốn hủy crawl?')" title="Hủy crawl">
+                        <i class="fas fa-stop"></i> Cancel
+                    </button>
+                </form>
+            </div>
+            <div class="btn-group" role="group" style="width: 100%;">
+                <form action="/admin/stories/${story.id}/remove-from-queue" method="POST" style="display: inline; flex: 1;">
+                    <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                    <button type="submit" class="btn btn-sm btn-danger" style="width: 100%;"
+                            onclick="return confirm('Bạn có chắc muốn xóa khỏi queue?')" title="Xóa khỏi queue">
+                        <i class="fas fa-times"></i> Remove Queue
+                    </button>
+                </form>
+            </div>
+        `;
+    } else { // CRAWLED
+        actionsHtml = `
+            <form action="/admin/stories/${story.id}/smart-crawl" method="POST" style="display: inline;">
+                <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                <button type="submit" class="btn btn-sm btn-outline-success btn-block" title="Crawl lại chương thiếu">
+                    <i class="fas fa-redo"></i> Re-crawl Missing
+                </button>
+            </form>
+        `;
+    }
+
+    actionsDiv.innerHTML = actionsHtml;
+}
+
+// Helper function to update pending jobs count
+function updatePendingJobsCount(storyId, count) {
+    const pendingElement = document.querySelector(`.pending-info[data-story-id="${storyId}"] .pending-count`);
+    if (pendingElement) {
+        pendingElement.textContent = count;
+
+        // Update color based on count
+        const pendingInfo = pendingElement.closest('.pending-info');
+        if (count > 0) {
+            pendingInfo.className = 'btn btn-sm btn-warning pending-info';
+        } else {
+            pendingInfo.className = 'btn btn-sm btn-outline-info pending-info';
+        }
+    }
+}
+
+// Update every 5 seconds
+setInterval(updateStoryStatus, 5000);
+
+// Update immediately on page load
+document.addEventListener('DOMContentLoaded', updateStoryStatus);
+
+// Update when page becomes visible (user switches back to tab)
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        updateStoryStatus();
+    }
+});
+</script>
+@endpush
+@endsection

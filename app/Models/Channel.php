@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Helpers\SlugHelper;
 
 class Channel extends Model
 {
@@ -91,15 +92,7 @@ class Channel extends Model
 
         static::creating(function ($channel) {
             if (empty($channel->slug)) {
-                $channel->slug = Str::slug($channel->name);
-
-                // Ensure unique slug
-                $originalSlug = $channel->slug;
-                $counter = 1;
-                while (static::where('slug', $channel->slug)->exists()) {
-                    $channel->slug = $originalSlug . '-' . $counter;
-                    $counter++;
-                }
+                $channel->slug = SlugHelper::createUniqueSlug($channel->name, static::class);
             }
         });
     }
@@ -119,6 +112,22 @@ class Channel extends Model
 
     public function hasValidCredentials()
     {
+        if (empty($this->api_credentials)) {
+            return false;
+        }
+
+        if ($this->platform === 'tiktok') {
+            return isset($this->api_credentials['access_token']) &&
+                   !empty($this->api_credentials['access_token']);
+        }
+
+        if ($this->platform === 'youtube') {
+            return isset($this->api_credentials['client_id']) &&
+                   isset($this->api_credentials['client_secret']) &&
+                   !empty($this->api_credentials['client_id']) &&
+                   !empty($this->api_credentials['client_secret']);
+        }
+
         return !empty($this->api_credentials);
     }
 

@@ -78,11 +78,18 @@
                     <label for="content">Nội dung</label>
                     @if(!$chapter->hasContentInDatabase() && $chapter->file_path)
                         <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle"></i> 
+                            <i class="fas fa-exclamation-triangle"></i>
                             Nội dung hiện đang được đọc từ file. Nếu bạn sửa và lưu, nội dung sẽ được lưu vào database.
                         </div>
                     @endif
-                    <textarea name="content" id="content" class="form-control" rows="20" required>{{ old('content', $chapter->content) }}</textarea>
+                    <x-tinymce-editor
+                        name="content"
+                        id="content"
+                        :value="old('content', $chapter->content)"
+                        :height="500"
+                        placeholder="Nhập nội dung chapter..."
+                        toolbar="full"
+                        required />
                 </div>
                 
                 <div class="form-group">

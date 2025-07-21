@@ -4,20 +4,35 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Traits\SortableTrait;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
+    use SortableTrait;
     public function __construct()
     {
         $this->middleware(['auth', 'admin']);
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $users = User::latest()->paginate(10);
+        $query = User::query();
+
+        // Search functionality
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+        }
+
+        // Apply sorting
+        $allowedSorts = ['name', 'email', 'role', 'created_at', 'updated_at'];
+        $query = $this->applySorting($query, $request, $allowedSorts, 'created_at', 'desc');
+
+        $users = $query->paginate(10);
         return view('admin.users.index', compact('users'));
     }
 

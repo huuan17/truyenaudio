@@ -6,7 +6,7 @@
     <form action="{{ route('admin.genres.update', $genre) }}" method="POST">
         @csrf
         @method('PUT')
-        @include('genres.form')
+        @include('admin.genres.form')
     </form>
 </div>
 @endsection

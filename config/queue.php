@@ -38,7 +38,15 @@ return [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 90,
+            'retry_after' => 300, // 5 minutes for regular jobs
+            'after_commit' => false,
+        ],
+
+        'database_crawl' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'crawl',
+            'retry_after' => 14400, // 4 hours for crawl jobs
             'after_commit' => false,
         ],
 

@@ -43,8 +43,17 @@ class LoginController extends Controller
 
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
-            
-            return redirect()->intended(route('dashboard'))
+
+            // Debug logging
+            \Log::info('Login successful', [
+                'user_id' => Auth::id(),
+                'user_email' => Auth::user()->email,
+                'is_admin' => Auth::user()->isAdmin(),
+                'intended_url' => session()->get('url.intended'),
+                'dashboard_route' => route('admin.dashboard'),
+            ]);
+
+            return redirect()->intended(route('admin.dashboard'))
                 ->with('success', 'Đăng nhập thành công!');
         }
 

@@ -25,9 +25,16 @@
                     <form action="{{ route('admin.stories.scan', $story) }}" method="POST">
                         @csrf
                         <div class="form-group">
-                            <label for="crawl_path">Thư mục chứa file text</label>
-                            <input type="text" class="form-control" value="{{ $story->crawl_path }}" readonly>
-                            <small class="form-text text-muted">Đường dẫn thư mục chứa các file .txt đã crawl</small>
+                            <label for="storage_path">Thư mục chứa file text</label>
+                            @php
+                                $storagePath = 'storage/app/content/' . $story->folder_name;
+                                $fullPath = storage_path('app/content/' . $story->folder_name);
+                            @endphp
+                            <input type="text" class="form-control" value="{{ $storagePath }}" readonly>
+                            <small class="form-text text-muted">
+                                Đường dẫn: {{ $fullPath }}<br>
+                                Thư mục chứa các file .txt đã crawl
+                            </small>
                         </div>
                         
                         <div class="form-group">
@@ -58,12 +65,13 @@
                         <div class="alert alert-info">
                             <h5><i class="fas fa-info-circle"></i> Thông tin quét chapter:</h5>
                             <ul class="mb-0">
-                                <li>Hệ thống sẽ quét tất cả file .txt trong thư mục <code>{{ $story->crawl_path }}</code></li>
+                                <li>Hệ thống sẽ quét tất cả file .txt trong thư mục <code>storage/app/content/{{ $story->folder_name }}</code></li>
                                 <li>Tên file phải theo định dạng: <code>chuong-{số}.txt</code> hoặc <code>chuong_{số}.txt</code></li>
                                 <li>Tiêu đề chapter sẽ được tự động trích xuất từ nội dung file</li>
                                 <li><strong>Mặc định:</strong> Chỉ lưu thông tin file (tiết kiệm dung lượng database)</li>
                                 <li><strong>Tùy chọn:</strong> Có thể lưu cả nội dung vào database nếu cần</li>
-                                <li>Quá trình này có thể mất thời gian tùy thuộc vào số lượng file</li>
+                                <li><strong>⚠️ Lưu ý:</strong> Quá trình này có thể mất thời gian với truyện có nhiều chapter (vài phút)</li>
+                                <li><strong>🔧 Cải tiến:</strong> Xử lý theo batch để tránh timeout, có logging chi tiết</li>
                             </ul>
                         </div>
                         
@@ -82,7 +90,7 @@
                         </div>
                         <div class="card-body">
                             @php
-                                $textFolder = base_path($story->crawl_path);
+                                $textFolder = storage_path('app/content/' . $story->folder_name);
                                 $textFiles = \Illuminate\Support\Facades\File::isDirectory($textFolder)
                                     ? \Illuminate\Support\Facades\File::glob("$textFolder/*.txt")
                                     : [];

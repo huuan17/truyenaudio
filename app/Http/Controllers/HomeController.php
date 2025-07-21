@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Story;
 use App\Models\Genre;
 use App\Models\Chapter;
+use App\Models\Author;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
@@ -15,14 +16,16 @@ class HomeController extends Controller
     public function index()
     {
         // Truyện hot (có nhiều chapter và được cập nhật gần đây)
-        $hotStories = Story::withCount('chapters')
+        $hotStories = Story::visible()
+            ->withCount('chapters')
             ->whereHas('chapters')
             ->orderBy('updated_at', 'desc')
             ->limit(12)
             ->get();
 
         // Truyện mới cập nhật
-        $recentStories = Story::with(['chapters' => function($query) {
+        $recentStories = Story::visible()
+            ->with(['chapters' => function($query) {
                 $query->orderBy('chapter_number', 'desc')->limit(1);
             }])
             ->whereHas('chapters')
@@ -31,14 +34,15 @@ class HomeController extends Controller
             ->get();
 
         // Truyện hoàn thành
-        $completedStories = Story::where('status', 'completed')
+        $completedStories = Story::visible()
+            ->where('status', 'completed')
             ->withCount('chapters')
             ->orderBy('updated_at', 'desc')
             ->limit(8)
             ->get();
 
         // Thể loại phổ biến
-        $popularGenres = Genre::withCount('stories')
+        $popularGenres = Genre::public()->withCount('stories')
             ->having('stories_count', '>', 0)
             ->orderBy('stories_count', 'desc')
             ->limit(20)
@@ -57,9 +61,9 @@ class HomeController extends Controller
      */
     public function genre(Request $request, $slug)
     {
-        $genre = Genre::where('slug', $slug)->firstOrFail();
+        $genre = Genre::where('slug', $slug)->public()->firstOrFail();
         
-        $query = $genre->stories()->with(['chapters' => function($q) {
+        $query = $genre->stories()->visible()->with(['chapters' => function($q) {
             $q->orderBy('chapter_number', 'desc')->limit(1);
         }]);
 
@@ -82,21 +86,26 @@ class HomeController extends Controller
      */
     public function story($slug)
     {
-        $story = Story::where('slug', $slug)
-            ->with(['genres', 'chapters' => function($query) {
-                $query->orderBy('chapter_number', 'asc');
-            }])
+        $story = Story::visible()
+            ->where('slug', $slug)
+            ->with(['genres', 'authorModel'])
             ->firstOrFail();
 
+        // Phân trang chapters
+        $chapters = Chapter::where('story_id', $story->id)
+            ->orderBy('chapter_number', 'asc')
+            ->paginate(20); // 20 chapters per page
+
         // Truyện liên quan (cùng thể loại)
-        $relatedStories = Story::whereHas('genres', function($query) use ($story) {
+        $relatedStories = Story::visible()
+            ->whereHas('genres', function($query) use ($story) {
                 $query->whereIn('genres.id', $story->genres->pluck('id'));
             })
             ->where('id', '!=', $story->id)
             ->limit(6)
             ->get();
 
-        return view('frontend.story', compact('story', 'relatedStories'));
+        return view('frontend.story', compact('story', 'chapters', 'relatedStories'));
     }
 
     /**
@@ -104,7 +113,7 @@ class HomeController extends Controller
      */
     public function chapter($storySlug, $chapterNumber)
     {
-        $story = Story::where('slug', $storySlug)->firstOrFail();
+        $story = Story::visible()->where('slug', $storySlug)->firstOrFail();
         
         $chapter = Chapter::where('story_id', $story->id)
             ->where('chapter_number', $chapterNumber)
@@ -125,6 +134,47 @@ class HomeController extends Controller
     }
 
     /**
+     * Hiển thị danh sách tác giả
+     */
+    public function authors()
+    {
+        $authors = Author::active()
+            ->withCount('publishedStories')
+            ->orderBy('name')
+            ->paginate(12);
+
+        return view('frontend.authors', compact('authors'));
+    }
+
+    /**
+     * Hiển thị chi tiết tác giả
+     */
+    public function author($slug)
+    {
+        $author = Author::active()
+            ->where('slug', $slug)
+            ->firstOrFail();
+
+        // Lấy truyện của tác giả với phân trang (sử dụng stories thay vì publishedStories để test)
+        $stories = $author->stories()
+            ->where('is_public', true)
+            ->where('is_active', true)
+            ->with(['genres'])
+            ->withCount('chapters')
+            ->orderBy('created_at', 'desc')
+            ->paginate(12);
+
+        // Thống kê
+        $stats = [
+            'total_stories' => $author->stories()->where('is_public', true)->where('is_active', true)->count(),
+            'total_chapters' => $author->stories()->where('is_public', true)->where('is_active', true)->withCount('chapters')->get()->sum('chapters_count'),
+            'latest_story' => $author->stories()->where('is_public', true)->where('is_active', true)->latest()->first(),
+        ];
+
+        return view('frontend.author', compact('author', 'stories', 'stats'));
+    }
+
+    /**
      * Tìm kiếm truyện
      */
     public function search(Request $request)
@@ -133,9 +183,12 @@ class HomeController extends Controller
         $stories = collect();
 
         if ($keyword) {
-            $stories = Story::where('title', 'LIKE', "%{$keyword}%")
-                ->orWhere('author', 'LIKE', "%{$keyword}%")
-                ->orWhere('description', 'LIKE', "%{$keyword}%")
+            $stories = Story::visible()
+                ->where(function($query) use ($keyword) {
+                    $query->where('title', 'LIKE', "%{$keyword}%")
+                          ->orWhere('author', 'LIKE', "%{$keyword}%")
+                          ->orWhere('description', 'LIKE', "%{$keyword}%");
+                })
                 ->with(['chapters' => function($q) {
                     $q->orderBy('chapter_number', 'desc')->limit(1);
                 }])
@@ -150,7 +203,8 @@ class HomeController extends Controller
      */
     public function hot()
     {
-        $stories = Story::withCount('chapters')
+        $stories = Story::visible()
+            ->withCount('chapters')
             ->whereHas('chapters')
             ->orderBy('updated_at', 'desc')
             ->paginate(20);
@@ -163,7 +217,8 @@ class HomeController extends Controller
      */
     public function completed()
     {
-        $stories = Story::where('status', 'completed')
+        $stories = Story::visible()
+            ->where('status', 'completed')
             ->withCount('chapters')
             ->orderBy('updated_at', 'desc')
             ->paginate(20);
@@ -176,7 +231,8 @@ class HomeController extends Controller
      */
     public function recent()
     {
-        $stories = Story::with(['chapters' => function($query) {
+        $stories = Story::visible()
+            ->with(['chapters' => function($query) {
                 $query->orderBy('chapter_number', 'desc')->limit(1);
             }])
             ->whereHas('chapters')

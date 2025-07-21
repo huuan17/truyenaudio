@@ -45,6 +45,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Stories management
         Route::resource('stories', StoryController::class);
+        Route::get('/stories-search', [StoryController::class, 'search'])->name('stories.search');
 
         // Story chapters management
         Route::get('/stories/{story}/chapters', [StoryController::class, 'chapters'])->name('stories.chapters');
@@ -52,6 +53,23 @@ Route::middleware(['auth'])->group(function () {
         // Story crawling
         Route::get('/stories/{story}/crawl', [StoryController::class, 'showCrawlForm'])->name('stories.crawl.form');
         Route::post('/stories/{story}/crawl', [StoryController::class, 'crawl'])->name('stories.crawl');
+
+        // Smart crawl (re-crawl missing chapters only)
+        Route::get('/stories/{story}/smart-crawl', [StoryController::class, 'smartCrawl'])->name('stories.smart-crawl');
+        Route::post('/stories/{story}/smart-crawl', [StoryController::class, 'smartCrawl'])->name('stories.smart-crawl');
+
+        // Cancel crawl and queue management
+        Route::post('/stories/{story}/cancel-crawl', [StoryController::class, 'cancelCrawl'])->name('stories.cancel-crawl');
+        Route::post('/stories/{story}/remove-from-queue', [StoryController::class, 'removeFromQueue'])->name('stories.remove-from-queue');
+
+        // Toggle story public status
+        Route::post('/stories/{story}/toggle-public', [StoryController::class, 'togglePublic'])->name('stories.toggle-public');
+
+        // Update story status
+        Route::post('/stories/{story}/update-status', [StoryController::class, 'updateStatus'])->name('stories.update-status');
+
+        // Get stories status (for real-time updates)
+        Route::post('/stories/status', [StoryController::class, 'getStatus'])->name('stories.status');
 
         // Story text-to-speech
         Route::get('/stories/{story}/tts', [StoryController::class, 'showTtsForm'])->name('stories.tts.form');
@@ -72,17 +90,27 @@ Route::middleware(['auth'])->group(function () {
         // Chapters management
         Route::resource('chapters', ChapterController::class);
         Route::get('/chapters/create/{story_id?}', [ChapterController::class, 'create'])->name('chapters.create');
-        Route::get('/chapters/story/{story_id}', [ChapterController::class, 'index'])->name('chapters.index');
+        Route::get('/chapters/story/{story_id}', [ChapterController::class, 'indexByStory'])->name('chapters.index.by-story');
+        Route::get('/chapters', [ChapterController::class, 'indexAll'])->name('chapters.index');
 
         // Chapter TTS routes
         Route::post('/chapters/{chapter}/tts', [ChapterController::class, 'convertToTts'])->name('chapters.tts');
         Route::post('/stories/{story}/chapters/tts-all', [ChapterController::class, 'convertAllToTts'])->name('chapters.tts.all');
+        Route::post('/chapters/bulk-tts', [ChapterController::class, 'bulkTts'])->name('chapters.bulk-tts');
+        Route::post('/chapters/bulk-delete', [ChapterController::class, 'bulkDelete'])->name('chapters.bulk-delete');
+        Route::get('/chapters/tts-status-summary/{story}', [ChapterController::class, 'getTtsStatusSummary'])->name('chapters.tts-status-summary');
+        Route::get('/chapters/bulk-tts-tasks/{story}', [ChapterController::class, 'getBulkTtsTasks'])->name('chapters.bulk-tts-tasks');
+        Route::post('/chapters/cancel-all-tts', [ChapterController::class, 'cancelAllTts'])->name('chapters.cancel-all-tts');
 
         // Chapter content route
         Route::get('/chapters/{chapter}/content', [ChapterController::class, 'getContent'])->name('chapters.content');
 
         // Genres management
         Route::resource('genres', GenreController::class);
+
+        // Authors management
+        Route::resource('authors', App\Http\Controllers\Admin\AuthorController::class);
+        Route::patch('/authors/{author}/toggle-status', [App\Http\Controllers\Admin\AuthorController::class, 'toggleStatus'])->name('authors.toggle-status');
 
         // Logo Management
         Route::get('/logos', [App\Http\Controllers\Admin\LogoController::class, 'index'])->name('logos.index');
@@ -106,17 +134,93 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/scheduled-posts/bulk-action', [App\Http\Controllers\Admin\ScheduledPostController::class, 'bulkAction'])->name('scheduled-posts.bulk-action');
         Route::get('/scheduled-posts-stats', [App\Http\Controllers\Admin\ScheduledPostController::class, 'getDashboardStats'])->name('scheduled-posts.stats');
 
-        // TikTok Video Generator
-        Route::get('/tiktok', [App\Http\Controllers\Admin\TiktokVideoController::class, 'index'])->name('tiktok.index');
-        Route::post('/tiktok/generate', [App\Http\Controllers\Admin\TiktokVideoController::class, 'generate'])->name('tiktok.generate');
-        Route::delete('/tiktok/delete', [App\Http\Controllers\Admin\TiktokVideoController::class, 'delete'])->name('tiktok.delete');
-        Route::get('/tiktok/download/{filename}', [App\Http\Controllers\Admin\TiktokVideoController::class, 'download'])->name('tiktok.download');
-        Route::get('/tiktok/status', [App\Http\Controllers\Admin\TiktokVideoController::class, 'status'])->name('tiktok.status');
+        // Universal Video Generator
+        Route::get('/video-generator', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'index'])->name('video-generator.index');
+        Route::get('/video-generator/status', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'status'])->name('video-generator.status');
+        Route::post('/video-generator/generate', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generate'])->name('video-generator.generate');
+        Route::post('/video-generator/generate-batch', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generateBatch'])->name('video-generator.generate-batch');
+        Route::delete('/video-generator/delete/{platform}/{filename}', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'delete'])->name('video-generator.delete');
+        Route::get('/video-generator/download/{platform}/{filename}', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'download'])->name('video-generator.download');
+
+        // Video Queue Management
+        Route::get('/video-queue', [App\Http\Controllers\Admin\VideoQueueController::class, 'index'])->name('video-queue.index');
+        Route::get('/video-queue/status', [App\Http\Controllers\Admin\VideoQueueController::class, 'status'])->name('video-queue.status');
+        Route::post('/video-queue/{taskId}/cancel', [App\Http\Controllers\Admin\VideoQueueController::class, 'cancel'])->name('video-queue.cancel');
+        Route::post('/video-queue/{taskId}/retry', [App\Http\Controllers\Admin\VideoQueueController::class, 'retry'])->name('video-queue.retry');
+        Route::delete('/video-queue/{taskId}', [App\Http\Controllers\Admin\VideoQueueController::class, 'delete'])->name('video-queue.delete');
+        Route::post('/video-queue/clear-completed', [App\Http\Controllers\Admin\VideoQueueController::class, 'clearCompleted'])->name('video-queue.clear-completed');
+
+        // TikTok Video Generator (Disabled - Controller not found)
+        // Route::get('/tiktok', [App\Http\Controllers\Admin\TiktokVideoController::class, 'index'])->name('tiktok.index');
+        // Route::post('/tiktok/generate', [App\Http\Controllers\Admin\TiktokVideoController::class, 'generate'])->name('tiktok.generate');
+        // Route::delete('/tiktok/delete', [App\Http\Controllers\Admin\TiktokVideoController::class, 'delete'])->name('tiktok.delete');
+        // Route::get('/tiktok/download/{filename}', [App\Http\Controllers\Admin\TiktokVideoController::class, 'download'])->name('tiktok.download');
+        // Route::get('/tiktok/status', [App\Http\Controllers\Admin\TiktokVideoController::class, 'status'])->name('tiktok.status');
 
         // User management (Admin only)
         Route::middleware(['admin'])->group(function () {
             Route::resource('users', UserController::class);
         });
+
+        // Additional admin routes (placeholders for missing routes)
+        Route::get('/roles', function() {
+            return redirect()->route('admin.users.index')->with('info', 'Quản lý vai trò đang được phát triển');
+        })->name('roles.index');
+
+        Route::get('/settings', function() {
+            return view('admin.settings.index');
+        })->name('settings.index');
+
+        // TTS Monitor
+        Route::get('/tts-monitor', [App\Http\Controllers\Admin\TtsMonitorController::class, 'index'])->name('tts-monitor.index');
+        Route::get('/tts-monitor/status', [App\Http\Controllers\Admin\TtsMonitorController::class, 'status'])->name('tts-monitor.status');
+        Route::post('/tts-monitor/add-story', [App\Http\Controllers\Admin\TtsMonitorController::class, 'addStory'])->name('tts-monitor.add-story');
+        Route::post('/tts-monitor/cancel-job/{job}', [App\Http\Controllers\Admin\TtsMonitorController::class, 'cancelJob'])->name('tts-monitor.cancel-job');
+        Route::post('/tts-monitor/clear-failed', [App\Http\Controllers\Admin\TtsMonitorController::class, 'clearFailed'])->name('tts-monitor.clear-failed');
+        Route::get('/tts-monitor/job-details/{job}', [App\Http\Controllers\Admin\TtsMonitorController::class, 'jobDetails'])->name('tts-monitor.job-details');
+
+        // Crawl Monitor
+        Route::get('/crawl-monitor', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'index'])->name('crawl-monitor.index');
+        Route::get('/crawl-monitor/status', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'status'])->name('crawl-monitor.status');
+        Route::get('/crawl-monitor/queue-details', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'queueDetails'])->name('crawl-monitor.queue-details');
+        Route::get('/crawl-monitor/add-story', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'addStory'])->name('crawl-monitor.add-story');
+        Route::post('/crawl-monitor/recover', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'recover'])->name('crawl-monitor.recover');
+        Route::post('/crawl-monitor/stop', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'stop'])->name('crawl-monitor.stop');
+        Route::post('/crawl-monitor/prioritize-job', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'prioritizeJob'])->name('crawl-monitor.prioritize-job');
+        Route::post('/crawl-monitor/delay-job', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'delayJob'])->name('crawl-monitor.delay-job');
+        Route::post('/crawl-monitor/delete-job', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'deleteJob'])->name('crawl-monitor.delete-job');
+        Route::post('/crawl-monitor/rebalance-queue', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'rebalanceQueue'])->name('crawl-monitor.rebalance-queue');
+        Route::post('/crawl-monitor/update-story-status', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'updateStoryStatus'])->name('crawl-monitor.update-story-status');
+        Route::post('/crawl-monitor/clear-queue', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'clearQueue'])->name('crawl-monitor.clear-queue');
+        Route::post('/crawl-monitor/add-to-queue', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'addToQueue'])->name('crawl-monitor.add-to-queue');
+
+        Route::get('/help', function() {
+            return view('admin.help.index');
+        })->name('help.index');
+
+        Route::get('/help/{slug}', function($slug) {
+            return view('admin.help.show', compact('slug'));
+        })->name('help.show');
+
+        Route::get('/help-quick-reference', function() {
+            return view('admin.help.quick-reference');
+        })->name('help.quick-reference');
+
+        // Story Maintenance
+        Route::prefix('maintenance')->name('maintenance.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'index'])->name('index');
+            Route::post('/fix-chapter-count/{story}', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'fixChapterCount'])->name('fix-chapter-count');
+            Route::post('/update-crawl-status/{story}', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'updateCrawlStatus'])->name('update-crawl-status');
+            Route::post('/cancel-pending-tts/{story}', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'cancelPendingTTS'])->name('cancel-pending-tts');
+            Route::post('/cancel-all-tts', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'cancelAllPendingTTS'])->name('cancel-all-tts');
+            Route::post('/fix-stuck-tts', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'fixStuckTTS'])->name('fix-stuck-tts');
+            Route::post('/auto', [App\Http\Controllers\Admin\StoryMaintenanceController::class, 'runAutoMaintenance'])->name('auto');
+        });
+
+        // Story TTS Management
+        Route::get('/stories/{story}/tts-info', [App\Http\Controllers\Admin\StoryTtsController::class, 'getStoryTtsInfo'])->name('stories.tts-info');
+        Route::post('/stories/{story}/convert-tts', [App\Http\Controllers\Admin\StoryTtsController::class, 'convertStoryToTts'])->name('stories.convert-tts');
+        Route::post('/stories/{story}/cancel-tts', [App\Http\Controllers\Admin\StoryTtsController::class, 'cancelStoryTts'])->name('stories.cancel-tts');
 
         // Legacy crawl routes
         Route::get('/crawl', [CrawlController::class, 'index'])->name('crawl.index');
