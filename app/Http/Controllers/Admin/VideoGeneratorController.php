@@ -9,6 +9,8 @@ use Illuminate\Support\Str;
 use App\Models\Channel;
 use App\Services\VideoGenerationService;
 use App\Models\VideoGenerationTask;
+use App\Models\VideoTemplate;
+use App\Models\AudioLibrary;
 
 class VideoGeneratorController extends Controller
 {
@@ -68,7 +70,7 @@ class VideoGeneratorController extends Controller
         $platform = $request->input('platform');
 
         // Validate platform
-        if (!in_array($platform, ['tiktok', 'youtube', 'both'])) {
+        if (!in_array($platform, ['tiktok', 'youtube', 'both', 'none'])) {
             return back()->with('error', 'Platform không hợp lệ')->withInput();
         }
 
@@ -98,6 +100,17 @@ class VideoGeneratorController extends Controller
                         round(($tiktokTask->estimated_duration + $youtubeTask->estimated_duration)/60) . " phút" : "10-20 phút") . ". " .
                     "Bạn có thể theo dõi tiến trình tại đây."
                 );
+            } elseif ($platform === 'none') {
+                // Generate video without channel publishing
+                $task = $videoService->queueSingleVideo('none', $request, auth()->id());
+
+                // Redirect to video management instead of queue monitor
+                return redirect()->route('admin.videos.index')->with('success',
+                    "Video đã được thêm vào hàng đợi xử lý! Mã task: #{$task->id}. " .
+                    "Thời gian ước tính: " . ($task->estimated_duration ? round($task->estimated_duration/60) . " phút" : "5-10 phút") . ". " .
+                    "Video sẽ được lưu trữ mà không đăng lên kênh nào. " .
+                    "Bạn có thể theo dõi tiến trình tại Video Queue hoặc xem video đã tạo tại đây."
+                );
             } else {
                 // Generate for single platform
                 $task = $videoService->queueSingleVideo($platform, $request, auth()->id());
@@ -126,7 +139,7 @@ class VideoGeneratorController extends Controller
         $platform = $request->input('platform');
 
         // Validate platform
-        if (!in_array($platform, ['tiktok', 'youtube', 'both'])) {
+        if (!in_array($platform, ['tiktok', 'youtube', 'both', 'none'])) {
             return back()->with('error', 'Platform không hợp lệ')->withInput();
         }
 
@@ -156,6 +169,18 @@ class VideoGeneratorController extends Controller
                     "Các video sẽ được xử lý tuần tự để tránh quá tải máy chủ. " .
                     "Bạn có thể theo dõi tiến trình tại đây."
                 );
+            } elseif ($platform === 'none') {
+                // Generate batch videos without channel publishing
+                $batchResult = $videoService->queueBatchVideos('none', $request, auth()->id());
+
+                // Redirect to video management instead of queue monitor
+                return redirect()->route('admin.videos.index')->with('success',
+                    "Đã thêm {$batchResult['total_count']} video vào hàng đợi xử lý! " .
+                    "Batch ID: {$batchResult['batch_id']}. " .
+                    "Các video sẽ được xử lý tuần tự để tránh quá tải máy chủ. " .
+                    "Video sẽ được lưu trữ mà không đăng lên kênh nào. " .
+                    "Bạn có thể theo dõi tiến trình tại Video Queue hoặc xem video đã tạo tại đây."
+                );
             } else {
                 // Generate batch for single platform
                 $batchResult = $videoService->queueBatchVideos($platform, $request, auth()->id());
@@ -183,15 +208,15 @@ class VideoGeneratorController extends Controller
     private function getValidationRules($platform, $mode = 'single')
     {
         $baseRules = [
-            'platform' => 'required|in:tiktok,youtube,both',
+            'platform' => 'required|in:tiktok,youtube,both,none',
 
             // Media content rules
             'media_type' => 'required|in:images,video,mixed',
             'images' => 'nullable|array|max:20',
-            'images.*' => 'file|mimes:jpg,jpeg,png,gif|max:10240',
-            'background_video' => 'nullable|file|mimes:mp4,avi,mov|max:512000',
+            'images.*' => 'file|mimes:jpg,jpeg,png,gif|max:51200', // 50MB per image
+            'background_video' => 'nullable|file|mimes:mp4,avi,mov|max:512000', // 500MB
             'mixed_media' => 'nullable|array|max:30',
-            'mixed_media.*' => 'file|mimes:jpg,jpeg,png,gif,mp4,avi,mov|max:512000',
+            'mixed_media.*' => 'file|mimes:jpg,jpeg,png,gif,mp4,avi,mov|max:512000', // 500MB
             'remove_video_audio' => 'nullable|boolean',
 
             // Individual image settings
@@ -220,12 +245,13 @@ class VideoGeneratorController extends Controller
             'split_ratio' => 'nullable|in:50:50,60:40,70:30,80:20',
 
             // Audio content rules
-            'audio_source' => 'required|in:tts,upload,none',
+            'audio_source' => 'nullable|in:tts,upload,library,none',
             'tts_text' => 'nullable|required_if:audio_source,tts|string|min:10|max:5000',
             'tts_voice' => 'nullable|string',
             'tts_speed' => 'nullable|numeric|between:0.5,2.0',
-            'tts_volume' => 'nullable|numeric|between:1.0,2.0',
-            'audio_file' => 'nullable|required_if:audio_source,upload|file|mimes:mp3,wav,aac|max:102400',
+            'tts_volume' => 'nullable|numeric|between:0.5,2.0',
+            'audio_file' => 'nullable|required_if:audio_source,upload|file|mimes:mp3,wav,aac|max:512000', // 500MB
+            'library_audio_id' => 'nullable|required_if:audio_source,library|exists:audio_libraries,id',
             'audio_volume' => 'nullable|numeric|between:0.5,1.5',
             'audio_fade' => 'nullable|in:none,in,out,both',
 
@@ -233,20 +259,28 @@ class VideoGeneratorController extends Controller
             'enable_subtitle' => 'nullable|boolean',
             'subtitle_source' => 'nullable|required_if:enable_subtitle,1|in:auto,manual,upload',
             'subtitle_text' => 'nullable|string|max:10000',
-            'subtitle_file' => 'nullable|file|mimes:srt|max:1024',
+            'subtitle_file' => 'nullable|file|mimes:srt|max:10240', // 10MB
             'subtitle_position' => 'nullable|in:bottom,top,center',
-            'subtitle_size' => 'nullable|in:small,medium,large,xlarge',
-            'subtitle_color' => 'nullable|in:white,black,yellow,red,blue,green',
-            'subtitle_background' => 'nullable|in:none,black,white,solid_black,solid_white',
+            'subtitle_size' => 'nullable', // Allow both string and numeric values from templates
+            'subtitle_color' => 'nullable|string', // Allow hex colors from templates
+            'subtitle_background' => 'nullable|string', // Allow hex colors from templates
             'subtitle_outline' => 'nullable|boolean',
+
+            // Subtitle timing rules
+            'subtitle_timing_mode' => 'nullable|in:auto,image_sync,custom_timing',
+            'subtitle_per_image' => 'nullable|in:auto,sentence,word_count',
+            'words_per_image' => 'nullable|integer|between:5,50',
+            'subtitle_duration' => 'nullable|numeric|between:1,10',
+            'subtitle_delay' => 'nullable|numeric|between:0,3',
+            'subtitle_fade' => 'nullable|in:none,in,out,both',
 
             // Logo rules
             'enable_logo' => 'nullable|boolean',
             'logo_source' => 'nullable|required_if:enable_logo,1|in:library,upload',
             'selected_logo' => 'nullable|string',
-            'logo_file' => 'nullable|file|mimes:png,jpg,jpeg,gif|max:5120',
+            'logo_file' => 'nullable|file|mimes:png,jpg,jpeg,gif|max:51200', // 50MB
             'logo_position' => 'nullable|in:top-left,top-right,top-center,bottom-left,bottom-right,bottom-center,center,center-left,center-right',
-            'logo_size' => 'nullable|in:small,medium,large,xlarge,custom',
+            'logo_size' => 'nullable', // Allow both string and numeric values from templates
             'logo_width' => 'nullable|numeric|between:50,500',
             'logo_height' => 'nullable|numeric|between:50,500',
             'logo_opacity' => 'nullable|numeric|between:0.3,1.0',
@@ -256,7 +290,7 @@ class VideoGeneratorController extends Controller
             'logo_end_time' => 'nullable|numeric|min:0',
 
             // Duration settings
-            'duration_based_on' => 'required|in:images,video,audio,custom',
+            'duration_based_on' => 'nullable|in:images,video,audio,custom',
             'custom_duration' => 'nullable|required_if:duration_based_on,custom|numeric|between:5,600',
             'content_behavior' => 'nullable|in:loop,freeze,fade,crop',
             'sync_with_audio' => 'nullable|boolean',
@@ -267,7 +301,7 @@ class VideoGeneratorController extends Controller
             'video_description' => 'nullable|string|max:5000',
             'video_keywords' => 'nullable|string|max:500',
             'video_location' => 'nullable|string|max:255',
-            'video_thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
+            'video_thumbnail' => 'nullable|file|mimes:jpg,jpeg,png|max:51200', // 50MB
             'video_license' => 'nullable|in:standard,creative_commons',
             'video_made_for_kids' => 'nullable|boolean',
 
@@ -293,7 +327,10 @@ class VideoGeneratorController extends Controller
             'schedule_post' => 'nullable|boolean',
             'scheduled_date' => 'nullable|required_if:schedule_post,1|date',
             'scheduled_time' => 'nullable|required_if:schedule_post,1|date_format:H:i',
-            'output_name' => 'nullable|string|max:100'
+            'output_name' => 'nullable|string|max:100',
+
+            // Background audio from library
+            'background_audio_id' => 'nullable|exists:audio_libraries,id'
         ];
 
         // Add platform-specific rules
@@ -301,6 +338,8 @@ class VideoGeneratorController extends Controller
             $platformRules = $this->getTiktokValidationRules($mode);
         } elseif ($platform === 'youtube') {
             $platformRules = $this->getYoutubeValidationRules($mode);
+        } elseif ($platform === 'none') {
+            $platformRules = $this->getNoneValidationRules($mode);
         } else {
             $platformRules = $this->getBothPlatformValidationRules($mode);
         }
@@ -321,8 +360,34 @@ class VideoGeneratorController extends Controller
     {
         return [
             'batch_mode' => 'required|in:multiple_content,template',
-            'batch_count' => 'nullable|numeric|between:2,10',
-            'batch_videos' => 'nullable|array|max:10',
+            'batch_count' => 'nullable|numeric|between:2,20',
+
+            // Multiple content mode
+            'batch_texts' => 'nullable|array|max:20',
+            'batch_texts.*' => 'nullable|string|max:5000',
+            'batch_audio_files' => 'nullable|array|max:20',
+            'batch_audio_files.*' => 'nullable|file|mimes:mp3,wav,aac,m4a|max:512000', // 500MB
+            'batch_images' => 'nullable|array|max:20',
+            'batch_images.*' => 'nullable|array|max:10',
+            'batch_images.*.*' => 'file|mimes:jpg,jpeg,png,gif|max:51200', // 50MB
+            'batch_background_videos' => 'nullable|array|max:20',
+            'batch_background_videos.*' => 'nullable|file|mimes:mp4,avi,mov|max:512000', // 500MB
+            'batch_subtitles' => 'nullable|array|max:20',
+            'batch_subtitles.*' => 'nullable|string|max:2000',
+            'batch_subtitle_timing' => 'nullable|array|max:20',
+            'batch_subtitle_timing.*' => 'nullable|in:auto,image_sync,custom_timing',
+            'batch_output_names' => 'nullable|array|max:20',
+            'batch_output_names.*' => 'nullable|string|max:100',
+            'batch_durations' => 'nullable|array|max:20',
+            'batch_durations.*' => 'nullable|numeric|between:5,300',
+            'batch_transitions' => 'nullable|array|max:20',
+            'batch_transitions.*' => 'nullable|in:fade,slide,zoom,none',
+            'batch_volumes' => 'nullable|array|max:20',
+            'batch_volumes.*' => 'nullable|numeric|between:0,200',
+
+            // Template mode
+            'template_texts' => 'nullable|string|max:50000',
+            'template_auto_name' => 'nullable|boolean',
             'batch_videos.*.tts_text' => 'nullable|string|min:10|max:5000',
             'batch_videos.*.output_name' => 'nullable|string|max:255',
             'template_texts' => 'nullable|string|max:50000',
@@ -348,6 +413,19 @@ class VideoGeneratorController extends Controller
             'youtube_fps' => 'nullable|in:24,30,60',
             'youtube_quality' => 'nullable|in:medium,high,very_high',
             'youtube_output_name' => 'nullable|string|max:255',
+        ];
+    }
+
+    /**
+     * Get none platform validation rules (no channel publishing)
+     */
+    private function getNoneValidationRules($mode)
+    {
+        return [
+            'none_resolution' => 'nullable|in:1920x1080,1080x1920,1280x720,1080x1080',
+            'none_fps' => 'nullable|in:24,30,60',
+            'none_quality' => 'nullable|in:medium,high,very_high',
+            'none_output_name' => 'nullable|string|max:255',
         ];
     }
 
@@ -646,7 +724,13 @@ class VideoGeneratorController extends Controller
      */
     private function processAudioSettings($request)
     {
-        $audioSource = $request->input('audio_source', 'tts');
+        $audioSource = $request->input('audio_source', 'none'); // Default to 'none' instead of 'tts'
+        \Log::info('Processing audio settings', [
+            'audio_source' => $audioSource,
+            'has_tts_text' => !empty($request->input('tts_text')),
+            'tts_text_preview' => substr($request->input('tts_text', ''), 0, 50)
+        ]);
+
         $audioSettings = ['source' => $audioSource];
 
         switch ($audioSource) {
@@ -966,6 +1050,856 @@ class VideoGeneratorController extends Controller
             'total_pending' => VideoGenerationTask::forUser(auth()->id())->pending()->count(),
             'total_processing' => VideoGenerationTask::forUser(auth()->id())->processing()->count(),
         ]);
+    }
+
+    /**
+     * Generate video from template
+     */
+    public function generateFromTemplate(Request $request)
+    {
+        $logger = new \App\Services\CustomLoggerService();
+
+        try {
+            $logger->logInfo('video-template', 'Starting template video generation', [
+                'template_id' => $request->template_id,
+                'user_id' => auth()->id(),
+                'request_data' => $request->except(['_token', 'images', 'background_video'])
+            ]);
+
+            $template = VideoTemplate::findOrFail($request->template_id);
+
+            $logger->logInfo('video-template', 'Template loaded successfully', [
+                'template_name' => $template->name,
+                'template_category' => $template->category
+            ]);
+
+            // Validate template inputs
+            $this->validateTemplateInputs($request, $template);
+
+            $logger->logInfo('video-template', 'Template inputs validated successfully');
+
+            // Merge template settings with user inputs
+            $mergedRequest = $this->mergeTemplateData($request, $template);
+
+            $logger->logInfo('video-template', 'Template data merged successfully', [
+                'merged_platform' => $mergedRequest->input('platform'),
+                'merged_settings_count' => count($mergedRequest->all()),
+                'subtitle_size' => $mergedRequest->input('subtitle_size'),
+                'subtitle_color' => $mergedRequest->input('subtitle_color'),
+                'subtitle_background' => $mergedRequest->input('subtitle_background'),
+                'logo_size' => $mergedRequest->input('logo_size')
+            ]);
+
+            // Use existing generation logic
+            $result = $this->generate($mergedRequest);
+
+            $logger->logInfo('video-template', 'Template video generation completed successfully');
+
+            return $result;
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $logger->logError('video-template', 'Validation failed for template generation', [
+                'template_id' => $request->template_id,
+                'validation_errors' => $e->errors(),
+                'request_data' => $request->except(['_token', 'images', 'background_video'])
+            ], $e);
+
+            // Preserve all input data including nested inputs
+            $inputData = $request->all();
+
+            // Handle file inputs - store file names for display
+            if ($request->hasFile('inputs')) {
+                foreach ($request->file('inputs') as $inputName => $files) {
+                    if (is_array($files)) {
+                        $fileNames = [];
+                        foreach ($files as $file) {
+                            if ($file && $file->isValid()) {
+                                $fileNames[] = $file->getClientOriginalName();
+                            }
+                        }
+                        $inputData['inputs'][$inputName . '_files'] = $fileNames;
+                    } else {
+                        if ($files && $files->isValid()) {
+                            $inputData['inputs'][$inputName . '_file'] = $files->getClientOriginalName();
+                        }
+                    }
+                }
+            }
+
+            return back()->withErrors($e->errors())->withInput($inputData)->with('error', 'Dữ liệu nhập vào không hợp lệ. Vui lòng kiểm tra lại.');
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            $logger->logError('video-template', 'Template not found', [
+                'template_id' => $request->template_id
+            ], $e);
+
+            return back()->with('error', 'Template không tồn tại hoặc đã bị xóa.')->withInput();
+
+        } catch (\Exception $e) {
+            $logger->logError('video-template', 'Unexpected error during template generation', [
+                'template_id' => $request->template_id,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'request_data' => $request->except(['_token', 'images', 'background_video']),
+                'background_audio_id' => $request->background_audio_id
+            ], $e);
+
+            // Check for specific error types
+            $errorMessage = 'Có lỗi xảy ra khi tạo video từ template. Vui lòng thử lại sau.';
+
+            if (strpos($e->getMessage(), 'fileExists') !== false) {
+                $errorMessage = 'Lỗi kiểm tra file audio. Vui lòng chọn lại file audio hoặc bỏ qua phần audio.';
+            } elseif (strpos($e->getMessage(), 'AudioLibrary') !== false) {
+                $errorMessage = 'Lỗi xử lý thư viện audio. Vui lòng thử lại hoặc không sử dụng nhạc nền.';
+            } elseif (strpos($e->getMessage(), 'background_audio') !== false) {
+                $errorMessage = 'Lỗi xử lý nhạc nền. Vui lòng chọn lại file audio hoặc bỏ qua phần nhạc nền.';
+            }
+
+            // Preserve all input data including nested inputs
+            $inputData = $request->all();
+
+            // Handle file inputs - store file names for display
+            if ($request->hasFile('inputs')) {
+                foreach ($request->file('inputs') as $inputName => $files) {
+                    if (is_array($files)) {
+                        $fileNames = [];
+                        foreach ($files as $file) {
+                            if ($file && $file->isValid()) {
+                                $fileNames[] = $file->getClientOriginalName();
+                            }
+                        }
+                        $inputData['inputs'][$inputName . '_files'] = $fileNames;
+                    } else {
+                        if ($files && $files->isValid()) {
+                            $inputData['inputs'][$inputName . '_file'] = $files->getClientOriginalName();
+                        }
+                    }
+                }
+            }
+
+            return back()->with('error', $errorMessage)->withInput($inputData);
+        }
+    }
+
+    /**
+     * Validate template inputs
+     */
+    private function validateTemplateInputs(Request $request, VideoTemplate $template)
+    {
+        $rules = [];
+
+        // Validate required inputs
+        if ($template->required_inputs) {
+            foreach ($template->required_inputs as $input) {
+                $fieldName = "inputs.{$input['name']}";
+
+                switch ($input['type']) {
+                    case 'text':
+                    case 'textarea':
+                    case 'url':
+                        $rules[$fieldName] = 'required|string|max:10000';
+                        break;
+                    case 'number':
+                        $rules[$fieldName] = 'required|numeric';
+                        break;
+                    case 'audio':
+                        $rules[$fieldName] = 'required|file|mimes:mp3,wav,aac,m4a|max:512000'; // 500MB
+                        break;
+                    case 'image':
+                        $rules[$fieldName] = 'required|file|mimes:jpg,jpeg,png,gif|max:51200'; // 50MB
+                        break;
+                    case 'images':
+                        $rules[$fieldName] = 'required|array';
+                        $rules[$fieldName . '.*'] = 'file|mimes:jpg,jpeg,png,gif|max:51200'; // 50MB
+                        break;
+                    case 'video':
+                        $rules[$fieldName] = 'required|file|mimes:mp4,avi,mov|max:512000'; // 500MB
+                        break;
+                    case 'select':
+                        $rules[$fieldName] = 'required|string';
+                        break;
+                    case 'checkbox':
+                        $rules[$fieldName] = 'nullable|boolean';
+                        break;
+                    case 'file':
+                        $rules[$fieldName] = 'required|file|max:512000'; // 500MB max
+                        break;
+                }
+            }
+        }
+
+        // Validate optional inputs (if provided)
+        if ($template->optional_inputs) {
+            foreach ($template->optional_inputs as $input) {
+                $fieldName = "inputs.{$input['name']}";
+
+                switch ($input['type']) {
+                    case 'text':
+                    case 'textarea':
+                    case 'url':
+                        $rules[$fieldName] = 'nullable|string|max:10000';
+                        break;
+                    case 'number':
+                        $rules[$fieldName] = 'nullable|numeric';
+                        break;
+                    case 'audio':
+                        $rules[$fieldName] = 'nullable|file|mimes:mp3,wav,aac,m4a|max:512000'; // 500MB
+                        break;
+                    case 'image':
+                        $rules[$fieldName] = 'nullable|file|mimes:jpg,jpeg,png,gif|max:51200'; // 50MB
+                        break;
+                    case 'images':
+                        $rules[$fieldName] = 'nullable|array';
+                        $rules[$fieldName . '.*'] = 'file|mimes:jpg,jpeg,png,gif|max:51200'; // 50MB
+                        break;
+                    case 'video':
+                        $rules[$fieldName] = 'nullable|file|mimes:mp4,avi,mov|max:512000'; // 500MB
+                        break;
+                    case 'file':
+                        $rules[$fieldName] = 'nullable|file|max:512000'; // 500MB
+                        break;
+                    case 'select':
+                        $rules[$fieldName] = 'nullable|string';
+                        break;
+                    case 'checkbox':
+                        $rules[$fieldName] = 'nullable|boolean';
+                        break;
+                }
+            }
+        }
+
+        $logger = new \App\Services\CustomLoggerService();
+
+        try {
+            $logger->logDebug('video-template', 'Starting template input validation', [
+                'template_id' => $template->id,
+                'rules_count' => count($rules),
+                'input_data_keys' => array_keys($request->input('inputs', []))
+            ]);
+
+            $request->validate($rules);
+
+            $logger->logInfo('video-template', 'Template input validation passed successfully');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $logger->logError('video-template', 'Template input validation failed', [
+                'template_id' => $template->id,
+                'validation_errors' => $e->errors(),
+                'failed_rules' => array_keys($rules),
+                'input_data' => $request->input('inputs', [])
+            ], $e);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Merge template settings with user inputs
+     */
+    private function mergeTemplateData(Request $request, VideoTemplate $template)
+    {
+        $logger = new \App\Services\CustomLoggerService();
+
+        try {
+            $logger->logDebug('video-template', 'Starting template data merge', [
+                'template_id' => $template->id,
+                'template_settings_keys' => array_keys($template->settings ?? []),
+                'user_inputs_keys' => array_keys($request->input('inputs', []))
+            ]);
+
+            // Start with template settings
+            $data = $template->settings ?? [];
+
+            // Set default values FIRST to ensure audio_source is available during mapping
+            $data = array_merge([
+                'tts_speed' => 1.0,
+                'tts_volume' => 18, // Default to 18dB as per requirements
+                'audio_volume' => 18, // Default to 18dB as per requirements
+                'logo_opacity' => 1.0,
+                'logo_margin' => 20,
+                'duration_based_on' => 'images',
+                'video_title' => $template->generateVideoName(), // Auto-generate name
+                'platform' => 'none',
+                'audio_source' => 'none', // Default to no audio to avoid TTS requirement
+            ], $data);
+
+            // Map template inputs to actual form fields
+            $inputs = $request->input('inputs', []);
+
+            foreach ($inputs as $inputName => $inputValue) {
+                $logger->logDebug('video-template', "Mapping input: {$inputName}", [
+                    'input_value_type' => gettype($inputValue),
+                    'input_value_preview' => is_string($inputValue) ? substr($inputValue, 0, 100) : $inputValue,
+                    'current_audio_source' => $data['audio_source'] ?? 'not_set'
+                ]);
+
+                // Map common input names to form fields
+                $this->mapTemplateInput($data, $inputName, $inputValue, $request);
+
+                $logger->logDebug('video-template', "After mapping {$inputName}", [
+                    'audio_source' => $data['audio_source'] ?? 'not_set',
+                    'has_tts_text' => !empty($data['tts_text']),
+                    'tts_text_preview' => !empty($data['tts_text']) ? substr($data['tts_text'], 0, 50) : 'none'
+                ]);
+            }
+
+            // Post-process script_text based on audio_source
+            if (!empty($data['script_text'])) {
+                if ($data['audio_source'] === 'tts') {
+                    // Only use for TTS if audio_source is explicitly TTS
+                    $data['tts_text'] = $data['script_text'];
+                    $logger->logDebug('video-template', 'Script text mapped to TTS text', [
+                        'audio_source' => $data['audio_source'],
+                        'script_text_preview' => substr($data['script_text'], 0, 50)
+                    ]);
+                } else {
+                    // Use for subtitles instead
+                    $data['subtitle_text'] = $data['script_text'];
+                    $logger->logDebug('video-template', 'Script text mapped to subtitle text', [
+                        'audio_source' => $data['audio_source'],
+                        'script_text_preview' => substr($data['script_text'], 0, 50)
+                    ]);
+                }
+                // Remove script_text to avoid confusion
+                unset($data['script_text']);
+            }
+
+            // Apply template background music if not overridden by user
+            if (!$request->has('background_audio_id') && $template->background_music_type !== 'none') {
+                $backgroundMusic = $template->getBackgroundMusic();
+                if ($backgroundMusic) {
+                    switch ($backgroundMusic['type']) {
+                        case 'library':
+                        case 'random':
+                            $data['background_audio_id'] = $backgroundMusic['id'];
+                            $data['audio_volume'] = $backgroundMusic['volume'];
+                            $logger->logDebug('video-template', 'Applied template background music', [
+                                'type' => $backgroundMusic['type'],
+                                'id' => $backgroundMusic['id'],
+                                'title' => $backgroundMusic['title'] ?? 'Unknown',
+                                'volume' => $backgroundMusic['volume']
+                            ]);
+                            break;
+
+                        case 'file':
+                            // For uploaded files, we need to handle differently
+                            // Could copy to temp location or reference directly
+                            $logger->logDebug('video-template', 'Template has uploaded background music file', [
+                                'path' => $backgroundMusic['path'],
+                                'volume' => $backgroundMusic['volume']
+                            ]);
+                            break;
+                    }
+                }
+            }
+
+            $logger->logInfo('video-template', 'Template data merge completed successfully', [
+                'merged_data_keys' => array_keys($data),
+                'final_platform' => $data['platform'] ?? 'not_set',
+                'final_audio_source' => $data['audio_source'] ?? 'not_set',
+                'has_tts_text' => !empty($data['tts_text']),
+                'has_script_text' => !empty($data['script_text']),
+                'has_subtitle_text' => !empty($data['subtitle_text']),
+                'tts_text_preview' => !empty($data['tts_text']) ? substr($data['tts_text'], 0, 50) : 'none',
+                'subtitle_text_preview' => !empty($data['subtitle_text']) ? substr($data['subtitle_text'], 0, 50) : 'none'
+            ]);
+
+        } catch (\Exception $e) {
+            $logger->logError('video-template', 'Error during template data merge', [
+                'template_id' => $template->id,
+                'error_message' => $e->getMessage()
+            ], $e);
+
+            throw $e;
+        }
+
+
+
+        // Ensure TTS values are within valid ranges
+        if (isset($data['tts_speed'])) {
+            $data['tts_speed'] = max(0.5, min(2.0, (float)$data['tts_speed']));
+        }
+        if (isset($data['tts_volume'])) {
+            $data['tts_volume'] = max(0.5, min(2.0, (float)$data['tts_volume']));
+        }
+        if (isset($data['audio_volume'])) {
+            $data['audio_volume'] = max(0.5, min(1.5, (float)$data['audio_volume']));
+        }
+        if (isset($data['logo_opacity'])) {
+            $data['logo_opacity'] = max(0.3, min(1.0, (float)$data['logo_opacity']));
+        }
+
+        // Create a new request with merged data
+        $mergedRequest = new Request();
+        $mergedRequest->merge($data);
+
+        // Copy files from original request - handle nested inputs structure
+        if ($request->hasFile('inputs')) {
+            foreach ($request->file('inputs') as $inputName => $file) {
+                if (is_array($file)) {
+                    // Handle multiple files (like images array)
+                    foreach ($file as $index => $singleFile) {
+                        $mergedRequest->files->set("inputs.{$inputName}.{$index}", $singleFile);
+                    }
+
+                    // Also copy to top-level for VideoGenerationService compatibility
+                    if (in_array($inputName, ['images', 'product_images', 'background_images'])) {
+                        foreach ($file as $index => $singleFile) {
+                            $mergedRequest->files->set("images.{$index}", $singleFile);
+                        }
+                    } else {
+                        // Check if files are images by mime type
+                        $isImageArray = true;
+                        foreach ($file as $singleFile) {
+                            if (!str_starts_with($singleFile->getMimeType(), 'image/')) {
+                                $isImageArray = false;
+                                break;
+                            }
+                        }
+                        if ($isImageArray) {
+                            foreach ($file as $index => $singleFile) {
+                                $mergedRequest->files->set("images.{$index}", $singleFile);
+                            }
+                        }
+                    }
+                } else {
+                    // Handle single file
+                    $mergedRequest->files->set("inputs.{$inputName}", $file);
+
+                    // Also copy to top-level for VideoGenerationService compatibility
+                    if (in_array($inputName, ['background_video', 'product_video', 'audio_file', 'logo_file'])) {
+                        $mergedRequest->files->set($inputName, $file);
+                    } else {
+                        // Check if file is an image by mime type
+                        if (str_starts_with($file->getMimeType(), 'image/')) {
+                            // Single image - set as images array
+                            $mergedRequest->files->set('images', [$file]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also copy any other files not in inputs structure
+        foreach ($request->files->all() as $key => $files) {
+            if ($key !== 'inputs') {
+                if (is_array($files)) {
+                    foreach ($files as $subKey => $file) {
+                        $mergedRequest->files->set($key . '.' . $subKey, $file);
+                    }
+                } else {
+                    $mergedRequest->files->set($key, $files);
+                }
+            }
+        }
+
+        // Handle background audio from library
+        if ($request->has('background_audio_id') && !empty($request->background_audio_id)) {
+            $audioId = $request->background_audio_id;
+
+            try {
+                $audio = \App\Models\AudioLibrary::find($audioId);
+
+                if ($audio) {
+                    // Check if file exists
+                    if ($audio->fileExists()) {
+                        $logger->logInfo('video-template', 'Background audio selected from library', [
+                            'audio_id' => $audioId,
+                            'audio_title' => $audio->title,
+                            'audio_duration' => $audio->duration,
+                            'audio_file_path' => $audio->file_path
+                        ]);
+
+                        // Set the audio file path for video generation
+                        $mergedRequest->merge([
+                            'background_audio_id' => $audioId,
+                            'background_audio_path' => $audio->getFullPath(),
+                            'background_audio_duration' => $audio->duration,
+                            'use_background_audio' => true,
+                            'audio_source' => 'library',
+                            'library_audio_id' => $audioId
+                        ]);
+
+                        // Override default audio_source if background audio is selected
+                        $data['audio_source'] = 'library';
+                        $data['library_audio_id'] = $audioId;
+
+                        // Increment usage count
+                        $audio->incrementUsage();
+
+                    } else {
+                        $logger->logError('video-template', 'Background audio file not found', [
+                            'audio_id' => $audioId,
+                            'audio_title' => $audio->title,
+                            'audio_file_path' => $audio->file_path,
+                            'full_path' => $audio->getFullPath()
+                        ]);
+                    }
+                } else {
+                    $logger->logError('video-template', 'Background audio not found in database', [
+                        'audio_id' => $audioId
+                    ]);
+                }
+
+            } catch (\Exception $e) {
+                $logger->logError('video-template', 'Error processing background audio', [
+                    'audio_id' => $audioId,
+                    'error_message' => $e->getMessage()
+                ], $e);
+            }
+        }
+
+        return $mergedRequest;
+    }
+
+    /**
+     * Map template input to form field
+     */
+    private function mapTemplateInput(&$data, $inputName, $inputValue, $request)
+    {
+        // Common mappings from template input names to video generator form fields
+        $mappings = [
+            // Text content mappings - conditional based on audio_source
+            'script_text' => 'script_text', // Keep as script_text, will be mapped later based on audio_source
+            'lesson_content' => 'script_text',
+            'product_script' => 'script_text',
+            'subtitle_text' => 'subtitle_text',
+            'custom_subtitle' => 'subtitle_text',
+
+            // Media mappings
+            'background_images' => 'images',
+            'lesson_images' => 'images',
+            'product_images' => 'images',
+            'product_media' => 'images',
+            'titktok_1_anh' => 'images', // Template specific mapping
+            'background_video' => 'background_video',
+            'lesson_videos' => 'background_video',
+            'product_videos' => 'background_video',
+
+            // Audio mappings
+            'audio_file' => 'audio_file',
+            'voice_over_file' => 'audio_file',
+            'background_music' => 'audio_file',
+            'background_audio_id' => 'background_audio_id',
+
+            // Logo mappings
+            'logo_image' => 'logo_file',
+            'brand_logo' => 'logo_file',
+
+            // Video info mappings
+            'video_title' => 'video_title',
+            'video_description' => 'video_description',
+            'youtube_tags' => 'youtube_tags',
+            'hashtags_tiktok' => 'tiktok_hashtags',
+            'hashtags' => 'tiktok_hashtags',
+
+            // Output name mapping
+            'output_name' => 'tiktok_output_name',
+
+            // Special mappings
+            'call_to_action' => 'subtitle_text',
+            'product_price' => 'subtitle_text',
+            'contact_info' => 'subtitle_text',
+
+            // File mappings
+            'subtitle_file' => 'subtitle_file',
+
+            // Duration mappings
+            'fixed_duration_seconds' => 'custom_duration',
+            'image_duration_seconds' => 'default_image_duration',
+            'max_video_duration' => 'max_duration',
+            'custom_video_length' => 'custom_duration',
+            'lesson_image_duration' => 'default_image_duration',
+            'sync_tolerance' => 'sync_tolerance',
+            'tiktok_target_duration' => 'tiktok_duration',
+            'youtube_target_duration' => 'youtube_duration',
+            'product_showcase_time' => 'default_image_duration',
+            'cta_duration' => 'cta_duration',
+
+            // Demo template mappings
+            'demo_content' => 'tts_text',
+            'demo_images' => 'images',
+            'demo_audio' => 'audio_file',
+            'fixed_duration_value' => 'custom_duration',
+            'image_display_time' => 'default_image_duration',
+            'sync_tolerance_value' => 'sync_tolerance',
+            'max_duration_limit' => 'max_duration',
+        ];
+
+        if (isset($mappings[$inputName])) {
+            $formField = $mappings[$inputName];
+
+            // Handle file inputs
+            if ($request->hasFile("inputs.{$inputName}")) {
+                $file = $request->file("inputs.{$inputName}");
+
+
+
+                // Special handling for images array
+                if ($formField === 'images' && is_array($file)) {
+                    $data[$formField] = $file;
+                } else {
+                    $data[$formField] = $file;
+                }
+            } else {
+                // Handle text inputs
+                if (!empty($inputValue)) {
+                    // Special handling for TTS text mapping
+                    if ($formField === 'tts_text') {
+                        // Only set TTS text if audio_source is explicitly set to TTS
+                        // Otherwise, store as subtitle text or skip
+                        if (isset($data['audio_source']) && $data['audio_source'] === 'tts') {
+                            $data[$formField] = $inputValue;
+                        } else {
+                            // Store as subtitle text instead for non-TTS usage
+                            $data['subtitle_text'] = $inputValue;
+                        }
+                    } else {
+                        $data[$formField] = $inputValue;
+                    }
+                }
+            }
+        } else {
+            // Auto-mapping for template inputs based on type
+            if ($request->hasFile("inputs.{$inputName}")) {
+                $file = $request->file("inputs.{$inputName}");
+
+                // Auto-map image/images type inputs to 'images' field
+                if (is_array($file)) {
+                    // Multiple files - map to images
+                    $data['images'] = $file;
+                } else {
+                    // Single file - check if it's an image
+                    $mimeType = $file->getMimeType();
+                    if (str_starts_with($mimeType, 'image/')) {
+                        // Single image - convert to array for consistency
+                        $data['images'] = [$file];
+                    } else {
+                        // Other file types
+                        $data[$inputName] = $file;
+                    }
+                }
+            } elseif (!empty($inputValue)) {
+                // Direct mapping for text inputs
+                $data[$inputName] = $inputValue;
+            }
+        }
+
+        // Special handling for template choice inputs
+        $this->handleTemplateChoices($data, $inputName, $inputValue);
+
+        // Special handling for platform-specific output names
+        if ($inputName === 'output_name' && !empty($inputValue)) {
+            $platform = $data['platform'] ?? 'tiktok';
+            if ($platform === 'tiktok') {
+                $data['tiktok_output_name'] = $inputValue;
+            } elseif ($platform === 'youtube') {
+                $data['youtube_output_name'] = $inputValue;
+            } elseif ($platform === 'both') {
+                $data['tiktok_output_name'] = $inputValue . '_tiktok';
+                $data['youtube_output_name'] = $inputValue . '_youtube';
+            }
+        }
+    }
+
+    /**
+     * Handle template choice inputs that affect settings
+     */
+    private function handleTemplateChoices(&$data, $inputName, $inputValue)
+    {
+        switch ($inputName) {
+            case 'media_type_choice':
+                $data['media_type'] = $inputValue;
+                break;
+
+            case 'audio_source_choice':
+                $data['audio_source'] = $inputValue;
+                break;
+
+            case 'media_setup':
+                if ($inputValue === 'images_only') {
+                    $data['media_type'] = 'images';
+                } elseif ($inputValue === 'video_only') {
+                    $data['media_type'] = 'video';
+                } elseif (str_contains($inputValue, 'mixed')) {
+                    $data['media_type'] = 'mixed';
+                    if ($inputValue === 'mixed_sequence') {
+                        $data['mixed_mode'] = 'sequence';
+                    } elseif ($inputValue === 'mixed_overlay') {
+                        $data['mixed_mode'] = 'overlay';
+                    } elseif ($inputValue === 'split_screen') {
+                        $data['mixed_mode'] = 'split';
+                    }
+                }
+                break;
+
+            case 'audio_method':
+                if ($inputValue === 'tts_vbee') {
+                    $data['audio_source'] = 'tts';
+                } elseif ($inputValue === 'upload_audio') {
+                    $data['audio_source'] = 'upload';
+                } elseif ($inputValue === 'video_audio') {
+                    $data['audio_source'] = 'video';
+                    $data['remove_video_audio'] = false;
+                } elseif ($inputValue === 'mixed_audio') {
+                    $data['audio_source'] = 'mixed';
+                }
+                break;
+
+            case 'subtitle_method':
+                if ($inputValue === 'auto_from_tts') {
+                    $data['enable_subtitle'] = true;
+                    $data['subtitle_source'] = 'auto';
+                } elseif ($inputValue === 'manual_input') {
+                    $data['enable_subtitle'] = true;
+                    $data['subtitle_source'] = 'manual';
+                } elseif ($inputValue === 'upload_srt') {
+                    $data['enable_subtitle'] = true;
+                    $data['subtitle_source'] = 'upload';
+                } elseif ($inputValue === 'no_subtitle') {
+                    $data['enable_subtitle'] = false;
+                }
+                break;
+
+            case 'duration_control':
+                $this->handleDurationControl($data, $inputValue);
+                break;
+
+            case 'video_duration_control':
+                $this->handleVideoDurationControl($data, $inputValue);
+                break;
+
+            case 'marketing_duration_strategy':
+                $this->handleMarketingDurationStrategy($data, $inputValue);
+                break;
+
+            case 'duration_strategy':
+                $this->handleDurationStrategy($data, $inputValue);
+                break;
+
+            case 'content_strategy':
+            case 'media_composition':
+            case 'audio_strategy':
+                // Store these for reference but don't directly map to settings
+                $data["template_{$inputName}"] = $inputValue;
+                break;
+        }
+    }
+
+    /**
+     * Handle duration control for TikTok template
+     */
+    private function handleDurationControl(&$data, $inputValue)
+    {
+        switch ($inputValue) {
+            case 'auto_images':
+                $data['duration_based_on'] = 'images';
+                $data['sync_with_audio'] = false;
+                break;
+
+            case 'audio_length':
+                $data['duration_based_on'] = 'audio';
+                $data['sync_with_audio'] = true;
+                break;
+
+            case 'video_length':
+                $data['duration_based_on'] = 'video';
+                $data['sync_with_audio'] = false;
+                break;
+
+            case 'fixed_duration':
+                $data['duration_based_on'] = 'custom';
+                $data['sync_with_audio'] = false;
+                break;
+        }
+    }
+
+    /**
+     * Handle video duration control for YouTube template
+     */
+    private function handleVideoDurationControl(&$data, $inputValue)
+    {
+        switch ($inputValue) {
+            case 'content_based':
+                $data['duration_based_on'] = 'images';
+                $data['auto_adjust_images'] = true;
+                break;
+
+            case 'audio_sync':
+                $data['duration_based_on'] = 'audio';
+                $data['sync_with_audio'] = true;
+                break;
+
+            case 'video_sync':
+                $data['duration_based_on'] = 'video';
+                $data['sync_with_audio'] = false;
+                break;
+
+            case 'custom_length':
+                $data['duration_based_on'] = 'custom';
+                $data['sync_with_audio'] = false;
+                break;
+        }
+    }
+
+    /**
+     * Handle marketing duration strategy
+     */
+    private function handleMarketingDurationStrategy(&$data, $inputValue)
+    {
+        switch ($inputValue) {
+            case 'platform_optimal':
+                // Set optimal durations for each platform
+                $data['tiktok_duration'] = 30; // Optimal for TikTok
+                $data['youtube_duration'] = 120; // Optimal for YouTube
+                $data['duration_based_on'] = 'custom';
+                break;
+
+            case 'content_driven':
+                $data['duration_based_on'] = 'images';
+                $data['auto_adjust_images'] = true;
+                break;
+
+            case 'audio_matched':
+                $data['duration_based_on'] = 'audio';
+                $data['sync_with_audio'] = true;
+                break;
+
+            case 'fixed_marketing':
+                $data['duration_based_on'] = 'custom';
+                $data['sync_with_audio'] = false;
+                break;
+        }
+    }
+
+    /**
+     * Handle duration strategy for demo template
+     */
+    private function handleDurationStrategy(&$data, $inputValue)
+    {
+        switch ($inputValue) {
+            case 'auto_images':
+                $data['duration_based_on'] = 'images';
+                $data['sync_with_audio'] = false;
+                break;
+
+            case 'audio_sync':
+                $data['duration_based_on'] = 'audio';
+                $data['sync_with_audio'] = true;
+                break;
+
+            case 'fixed_time':
+                $data['duration_based_on'] = 'custom';
+                $data['sync_with_audio'] = false;
+                break;
+
+            case 'custom_control':
+                $data['duration_based_on'] = 'custom';
+                $data['sync_with_audio'] = false;
+                $data['auto_adjust_images'] = true;
+                break;
+        }
     }
 
     /**

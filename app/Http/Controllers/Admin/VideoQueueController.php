@@ -277,4 +277,48 @@ class VideoQueueController extends Controller
             })
         ]);
     }
+
+    /**
+     * Get queue worker status
+     */
+    public function getWorkerStatus()
+    {
+        try {
+            // Check if there are any jobs being processed
+            $processingJobs = \DB::table('jobs')
+                ->where('queue', 'video')
+                ->where('reserved_at', '>', now()->subMinutes(5))
+                ->count();
+
+            // Check if there are any recent job completions (within last 5 minutes)
+            $recentCompletions = VideoGenerationTask::where('updated_at', '>', now()->subMinutes(5))
+                ->whereIn('status', ['completed', 'failed'])
+                ->count();
+
+            // Check if there are pending jobs
+            $pendingJobs = \DB::table('jobs')
+                ->where('queue', 'video')
+                ->whereNull('reserved_at')
+                ->count();
+
+            // Worker is considered running if:
+            // 1. There are jobs being processed, OR
+            // 2. There were recent completions, OR
+            // 3. There are no pending jobs (worker processed everything)
+            $workerRunning = $processingJobs > 0 || $recentCompletions > 0 || $pendingJobs === 0;
+
+            return response()->json([
+                'worker_running' => $workerRunning,
+                'processing_jobs' => $processingJobs,
+                'pending_jobs' => $pendingJobs,
+                'recent_completions' => $recentCompletions,
+                'last_check' => now()->toISOString()
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'worker_running' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

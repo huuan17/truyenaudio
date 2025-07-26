@@ -8,17 +8,21 @@
         <div class="form-group">
             <label class="form-label">Nền tảng</label>
             <div class="btn-group btn-group-toggle d-block" data-toggle="buttons">
-                <label class="btn btn-outline-dark active mr-2 mb-2">
-                    <input type="radio" name="platform" value="tiktok" checked> 
+                <label class="btn btn-outline-dark mr-2 mb-2">
+                    <input type="radio" name="platform" value="tiktok">
                     <i class="fab fa-tiktok mr-1"></i>TikTok
                 </label>
                 <label class="btn btn-outline-danger mr-2 mb-2">
-                    <input type="radio" name="platform" value="youtube"> 
+                    <input type="radio" name="platform" value="youtube">
                     <i class="fab fa-youtube mr-1"></i>YouTube
                 </label>
-                <label class="btn btn-outline-info mb-2">
-                    <input type="radio" name="platform" value="both"> 
+                <label class="btn btn-outline-info mr-2 mb-2">
+                    <input type="radio" name="platform" value="both">
                     <i class="fas fa-globe mr-1"></i>Cả hai
+                </label>
+                <label class="btn btn-outline-secondary active mb-2">
+                    <input type="radio" name="platform" value="none" checked>
+                    <i class="fas fa-video mr-1"></i>Không đăng kênh
                 </label>
             </div>
         </div>
@@ -124,13 +128,63 @@
                 <i class="fas fa-info-circle mr-2"></i>
                 <strong>Tạo cho cả hai nền tảng:</strong> Hệ thống sẽ tạo 2 video với cài đặt tối ưu cho từng nền tảng.
             </div>
-            
+
             <div class="form-group">
                 <label for="both_output_prefix">Tiền tố tên file</label>
-                <input type="text" name="both_output_prefix" id="both_output_prefix" 
+                <input type="text" name="both_output_prefix" id="both_output_prefix"
                        class="form-control" placeholder="video_[timestamp]">
                 <small class="form-text text-muted">
                     Sẽ tạo: [prefix]_tiktok.mp4 và [prefix]_youtube.mp4
+                </small>
+            </div>
+        </div>
+
+        <!-- No Channel Settings -->
+        <div id="none-settings">
+            <div class="alert alert-secondary">
+                <i class="fas fa-video mr-2"></i>
+                <strong>Chỉ tạo video:</strong> Video sẽ được tạo và lưu trữ mà không đăng lên kênh nào.
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="none_resolution">Độ phân giải</label>
+                        <select name="none_resolution" id="none_resolution" class="form-control">
+                            <option value="1920x1080" selected>1920x1080 (16:9 - Khuyến nghị)</option>
+                            <option value="1080x1920">1080x1920 (9:16 - TikTok style)</option>
+                            <option value="1280x720">1280x720 (16:9)</option>
+                            <option value="1080x1080">1080x1080 (1:1)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="none_fps">FPS</label>
+                        <select name="none_fps" id="none_fps" class="form-control">
+                            <option value="24">24 FPS</option>
+                            <option value="30" selected>30 FPS (Khuyến nghị)</option>
+                            <option value="60">60 FPS</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="none_quality">Chất lượng video</label>
+                <select name="none_quality" id="none_quality" class="form-control">
+                    <option value="medium">Medium (Nhanh)</option>
+                    <option value="high" selected>High (Khuyến nghị)</option>
+                    <option value="very_high">Very High (Chậm)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="none_output_name">Tên file output</label>
+                <input type="text" name="none_output_name" id="none_output_name"
+                       class="form-control" placeholder="video_[timestamp]">
+                <small class="form-text text-muted">
+                    Để trống để tự động tạo tên. Hỗ trợ: [timestamp], [date], [time]
                 </small>
             </div>
         </div>

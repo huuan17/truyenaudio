@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Jobs\GenerateUniversalVideoJob;
 use App\Models\VideoGenerationTask;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 
@@ -117,11 +119,112 @@ class VideoGenerationService
         $baseParams = [
             '--output' => $outputName,
             '--temp-dir' => $tempDir,
+            '--task-id' => uniqid('video_', true),
         ];
 
-        if ($platform === 'tiktok') {
+        if ($platform === 'none') {
+            // Parameters for videos without channel publishing
+            $noneParams = [
+                '--platform' => 'none',
+                '--media-type' => $request->media_type ?: 'images',
+            ];
+
+            // Get output name from none-specific field
+            if ($request->none_output_name) {
+                $noneParams['--output'] = $request->none_output_name . '.mp4';
+            }
+
+            // Video settings
+            if ($request->none_resolution) {
+                $noneParams['--resolution'] = $request->none_resolution;
+            }
+            if ($request->none_fps) {
+                $noneParams['--fps'] = $request->none_fps;
+            }
+            if ($request->none_quality) {
+                $noneParams['--quality'] = $request->none_quality;
+            }
+
+            // Handle script/audio - only pass script if using TTS and have TTS text
+            if ($request->tts_text && $request->audio_source === 'tts') {
+                $noneParams['--script'] = $request->tts_text;
+                \Log::info('VideoGenerationService: Adding TTS script for none platform', [
+                    'audio_source' => $request->audio_source,
+                    'has_tts_text' => !empty($request->tts_text),
+                    'tts_text_preview' => substr($request->tts_text, 0, 50)
+                ]);
+            } else {
+                \Log::info('VideoGenerationService: Skipping TTS script for none platform', [
+                    'audio_source' => $request->audio_source,
+                    'has_tts_text' => !empty($request->tts_text),
+                    'has_script_text' => !empty($request->script_text)
+                ]);
+            }
+
+            // Handle audio source
+            if ($request->audio_source === 'upload' && $request->hasFile('audio_file')) {
+                $audioPath = $request->file('audio_file')->store("temp/audio", 'local');
+                $noneParams['--audio-file'] = storage_path("app/{$audioPath}");
+            } elseif ($request->audio_source === 'library' && $request->library_audio_id) {
+                $noneParams['--library-audio-id'] = $request->library_audio_id;
+                // Increment usage count
+                $audioLibrary = \App\Models\AudioLibrary::find($request->library_audio_id);
+                if ($audioLibrary) {
+                    $audioLibrary->incrementUsage();
+                }
+            }
+
+            // Handle media files based on type
+            if ($request->media_type === 'images') {
+                // Check for images from different sources (template vs direct upload)
+                $imageFiles = null;
+
+                if ($request->hasFile('product_images')) {
+                    $imageFiles = $request->file('product_images');
+                } elseif ($request->hasFile('images')) {
+                    $imageFiles = $request->file('images');
+                } elseif ($request->hasFile('inputs.images')) {
+                    $imageFiles = $request->file('inputs.images');
+                }
+
+                if ($imageFiles) {
+                    $noneParams['--slide-duration'] = $request->slide_duration ?: 3;
+                    $noneParams['--slide-transition'] = $request->slide_transition ?: 'slide';
+
+                    // Store multiple images
+                    $imagePaths = [];
+                    foreach ($imageFiles as $index => $image) {
+                        $imagePath = $image->store("temp/images", 'local');
+                        $imagePaths[] = storage_path("app/{$imagePath}");
+                    }
+                    $noneParams['--images'] = implode(',', $imagePaths);
+                }
+            } elseif ($request->hasFile('product_video') || $request->hasFile('background_video')) {
+                $videoFile = $request->file('product_video') ?: $request->file('background_video');
+                $videoPath = $videoFile->store("temp/videos", 'local');
+                $noneParams['--product-video'] = storage_path("app/{$videoPath}");
+            }
+
+            // Handle subtitle settings
+            if ($request->boolean('enable_subtitle')) {
+                $noneParams['--enable-subtitle'] = true;
+                if ($request->subtitle_text) {
+                    $noneParams['--subtitle-text'] = $request->subtitle_text;
+                }
+                if ($request->subtitle_position) {
+                    $noneParams['--subtitle-position'] = $request->subtitle_position;
+                }
+                if ($request->subtitle_size) {
+                    $noneParams['--subtitle-size'] = $request->subtitle_size;
+                }
+                if ($request->subtitle_color) {
+                    $noneParams['--subtitle-color'] = $request->subtitle_color;
+                }
+            }
+
+            return array_merge($baseParams, $noneParams);
+        } elseif ($platform === 'tiktok') {
             $tiktokParams = [
-                '--script' => $request->script_text,
                 '--voice' => $request->voice,
                 '--bitrate' => $request->bitrate,
                 '--speed' => $request->speed,
@@ -129,20 +232,63 @@ class VideoGenerationService
                 '--media-type' => $request->media_type ?: 'video',
             ];
 
-            // Handle media files based on type
-            if ($request->media_type === 'images' && $request->hasFile('product_images')) {
-                $tiktokParams['--slide-duration'] = $request->slide_duration ?: 3;
-                $tiktokParams['--slide-transition'] = $request->slide_transition ?: 'slide';
+            // Only add script if using TTS and have TTS text
+            if ($request->tts_text && $request->audio_source === 'tts') {
+                $tiktokParams['--script'] = $request->tts_text;
+                \Log::info('VideoGenerationService: Adding TTS script for TikTok platform', [
+                    'audio_source' => $request->audio_source,
+                    'has_tts_text' => !empty($request->tts_text),
+                    'tts_text_preview' => substr($request->tts_text, 0, 50)
+                ]);
+            } else {
+                \Log::info('VideoGenerationService: Skipping TTS script for TikTok platform', [
+                    'audio_source' => $request->audio_source,
+                    'has_tts_text' => !empty($request->tts_text),
+                    'has_script_text' => !empty($request->script_text)
+                ]);
+            }
 
-                // Store multiple images
-                $imagePaths = [];
-                foreach ($request->file('product_images') as $index => $image) {
-                    $imagePath = $image->store("temp/images", 'local');
-                    $imagePaths[] = storage_path("app/{$imagePath}");
+            // Handle audio source for TikTok
+            if ($request->audio_source === 'upload' && $request->hasFile('audio_file')) {
+                $audioPath = $request->file('audio_file')->store("temp/audio", 'local');
+                $tiktokParams['--audio-file'] = storage_path("app/{$audioPath}");
+            } elseif ($request->audio_source === 'library' && $request->library_audio_id) {
+                $tiktokParams['--library-audio-id'] = $request->library_audio_id;
+                // Increment usage count
+                $audioLibrary = \App\Models\AudioLibrary::find($request->library_audio_id);
+                if ($audioLibrary) {
+                    $audioLibrary->incrementUsage();
                 }
-                $tiktokParams['--product-images'] = implode(',', $imagePaths);
-            } elseif ($request->hasFile('product_video')) {
-                $videoPath = $request->file('product_video')->store("temp/videos", 'local');
+            }
+
+            // Handle media files based on type
+            if ($request->media_type === 'images') {
+                // Check for images from different sources (template vs direct upload)
+                $imageFiles = null;
+
+                if ($request->hasFile('product_images')) {
+                    $imageFiles = $request->file('product_images');
+                } elseif ($request->hasFile('images')) {
+                    $imageFiles = $request->file('images');
+                } elseif ($request->hasFile('inputs.images')) {
+                    $imageFiles = $request->file('inputs.images');
+                }
+
+                if ($imageFiles) {
+                    $tiktokParams['--slide-duration'] = $request->slide_duration ?: 3;
+                    $tiktokParams['--slide-transition'] = $request->slide_transition ?: 'slide';
+
+                    // Store multiple images
+                    $imagePaths = [];
+                    foreach ($imageFiles as $index => $image) {
+                        $imagePath = $image->store("temp/images", 'local');
+                        $imagePaths[] = storage_path("app/{$imagePath}");
+                    }
+                    $tiktokParams['--product-images'] = implode(',', $imagePaths);
+                }
+            } elseif ($request->hasFile('product_video') || $request->hasFile('background_video')) {
+                $videoFile = $request->file('product_video') ?: $request->file('background_video');
+                $videoPath = $videoFile->store("temp/videos", 'local');
                 $tiktokParams['--product-video'] = storage_path("app/{$videoPath}");
             }
 
@@ -155,6 +301,30 @@ class VideoGenerationService
                 $tiktokParams['--subtitle-background'] = $request->subtitle_background ?: '#000000';
                 $tiktokParams['--subtitle-font'] = $request->subtitle_font ?: 'Arial';
                 $tiktokParams['--subtitle-duration'] = $request->subtitle_duration ?: 5;
+
+                // Add timing parameters
+                $tiktokParams['--subtitle-timing-mode'] = $request->subtitle_timing_mode ?: 'auto';
+                $tiktokParams['--subtitle-per-image'] = $request->subtitle_per_image ?: 'auto';
+                $tiktokParams['--words-per-image'] = $request->words_per_image ?: 10;
+                $tiktokParams['--subtitle-delay'] = $request->subtitle_delay ?: 0.5;
+                $tiktokParams['--subtitle-fade'] = $request->subtitle_fade ?: 'in';
+
+            // Add duration control parameters
+            if ($request->has('duration_based_on')) {
+                $tiktokParams['--duration-based-on'] = $request->duration_based_on;
+            }
+            if ($request->has('custom_duration')) {
+                $tiktokParams['--custom-duration'] = $request->custom_duration;
+            }
+            if ($request->has('sync_with_audio')) {
+                $tiktokParams['--sync-with-audio'] = $request->sync_with_audio ? 'true' : 'false';
+            }
+            if ($request->has('max_duration')) {
+                $tiktokParams['--max-duration'] = $request->max_duration;
+            }
+            if ($request->has('sync_tolerance')) {
+                $tiktokParams['--sync-tolerance'] = $request->sync_tolerance;
+            }
             }
 
             // Handle channel settings (optional)
@@ -180,27 +350,48 @@ class VideoGenerationService
             ];
 
             // Handle audio source
-            if ($request->audio_source === 'text' && $request->text_content) {
-                $youtubeParams['--text-content'] = $request->text_content;
-                $youtubeParams['--voice'] = $request->voice;
-                $youtubeParams['--bitrate'] = $request->bitrate;
-                $youtubeParams['--speed'] = $request->speed;
-                $youtubeParams['--volume'] = $request->volume;
-            } elseif ($request->hasFile('audio_file')) {
+            if ($request->audio_source === 'tts' && $request->tts_text) {
+                $youtubeParams['--text-content'] = $request->tts_text;
+                $youtubeParams['--voice'] = $request->tts_voice;
+                $youtubeParams['--bitrate'] = $request->tts_bitrate;
+                $youtubeParams['--speed'] = $request->tts_speed;
+                $youtubeParams['--volume'] = $request->tts_volume;
+            } elseif ($request->audio_source === 'upload' && $request->hasFile('audio_file')) {
                 $audioPath = $request->file('audio_file')->store("temp/audio", 'local');
                 $youtubeParams['--audio-file'] = storage_path("app/{$audioPath}");
+            } elseif ($request->audio_source === 'library' && $request->library_audio_id) {
+                $youtubeParams['--library-audio-id'] = $request->library_audio_id;
+                // Increment usage count
+                $audioLibrary = \App\Models\AudioLibrary::find($request->library_audio_id);
+                if ($audioLibrary) {
+                    $audioLibrary->incrementUsage();
+                }
             }
 
             // Handle video content
-            if ($request->video_content_type === 'images' && $request->hasFile('images')) {
-                $imagePaths = [];
-                foreach ($request->file('images') as $image) {
-                    $imagePath = $image->store("temp/images", 'local');
-                    $imagePaths[] = storage_path("app/{$imagePath}");
+            if ($request->video_content_type === 'images') {
+                // Check for images from different sources (template vs direct upload)
+                $imageFiles = null;
+
+                if ($request->hasFile('images')) {
+                    $imageFiles = $request->file('images');
+                } elseif ($request->hasFile('product_images')) {
+                    $imageFiles = $request->file('product_images');
+                } elseif ($request->hasFile('inputs.images')) {
+                    $imageFiles = $request->file('inputs.images');
                 }
-                $youtubeParams['--images'] = implode(',', $imagePaths);
-            } elseif ($request->hasFile('background_video')) {
-                $videoPath = $request->file('background_video')->store("temp/videos", 'local');
+
+                if ($imageFiles) {
+                    $imagePaths = [];
+                    foreach ($imageFiles as $image) {
+                        $imagePath = $image->store("temp/images", 'local');
+                        $imagePaths[] = storage_path("app/{$imagePath}");
+                    }
+                    $youtubeParams['--images'] = implode(',', $imagePaths);
+                }
+            } elseif ($request->hasFile('background_video') || $request->hasFile('product_video')) {
+                $videoFile = $request->file('background_video') ?: $request->file('product_video');
+                $videoPath = $videoFile->store("temp/videos", 'local');
                 $youtubeParams['--background-video'] = storage_path("app/{$videoPath}");
             }
 
@@ -213,6 +404,30 @@ class VideoGenerationService
                 $youtubeParams['--subtitle-background'] = $request->subtitle_background ?: '#000000';
                 $youtubeParams['--subtitle-font'] = $request->subtitle_font ?: 'Arial';
                 $youtubeParams['--subtitle-duration'] = $request->subtitle_duration ?: 5;
+
+                // Add timing parameters
+                $youtubeParams['--subtitle-timing-mode'] = $request->subtitle_timing_mode ?: 'auto';
+                $youtubeParams['--subtitle-per-image'] = $request->subtitle_per_image ?: 'auto';
+                $youtubeParams['--words-per-image'] = $request->words_per_image ?: 10;
+                $youtubeParams['--subtitle-delay'] = $request->subtitle_delay ?: 0.5;
+                $youtubeParams['--subtitle-fade'] = $request->subtitle_fade ?: 'in';
+
+                // Add duration control parameters
+                if ($request->has('duration_based_on')) {
+                    $youtubeParams['--duration-based-on'] = $request->duration_based_on;
+                }
+                if ($request->has('custom_duration')) {
+                    $youtubeParams['--custom-duration'] = $request->custom_duration;
+                }
+                if ($request->has('sync_with_audio')) {
+                    $youtubeParams['--sync-with-audio'] = $request->sync_with_audio ? 'true' : 'false';
+                }
+                if ($request->has('max_duration')) {
+                    $youtubeParams['--max-duration'] = $request->max_duration;
+                }
+                if ($request->has('sync_tolerance')) {
+                    $youtubeParams['--sync-tolerance'] = $request->sync_tolerance;
+                }
             }
 
             // Handle channel settings (optional)
@@ -237,40 +452,82 @@ class VideoGenerationService
      */
     private function prepareBatchData($platform, Request $request)
     {
-        if ($platform === 'tiktok') {
-            $scripts = $request->scripts ?: [];
-            $batchData = [];
-            
-            foreach ($scripts as $index => $script) {
-                $batchData[] = [
-                    'script' => $script,
-                    'product_video' => $request->file('product_videos')[$index] ?? null,
-                    'product_image' => $request->file('product_images')[$index] ?? null,
-                    'output_name' => $request->output_names[$index] ?? null,
-                    'subtitle_text' => $request->subtitle_texts[$index] ?? null,
-                ];
+        $batchMode = $request->input('batch_mode', 'multiple_content');
+        $batchData = [];
+
+        if ($batchMode === 'template') {
+            // Template mode: split text by lines
+            $templateTexts = $request->input('template_texts', '');
+            $lines = array_filter(explode("\n", $templateTexts));
+
+            foreach ($lines as $index => $line) {
+                $line = trim($line);
+                if (!empty($line)) {
+                    $outputName = $request->boolean('template_auto_name')
+                        ? "video_" . ($index + 1)
+                        : null;
+
+                    $batchData[] = [
+                        'text_content' => $line,
+                        'audio_source' => 'tts', // Default to TTS for template mode
+                        'output_name' => $outputName,
+                        'subtitle_text' => $line, // Use same text as subtitle
+                    ];
+                }
             }
-            
-            return $batchData;
-        } else { // youtube
-            $audioSources = $request->audio_sources ?: [];
-            $batchData = [];
-            
-            foreach ($audioSources as $index => $audioSource) {
-                $batchData[] = [
-                    'audio_source' => $audioSource,
-                    'text_content' => $request->text_contents[$index] ?? null,
-                    'audio_file' => $request->file('audio_files')[$index] ?? null,
-                    'video_content_type' => $request->video_content_types[$index],
-                    'images' => $request->file('batch_images')[$index] ?? null,
-                    'background_video' => $request->file('batch_background_videos')[$index] ?? null,
-                    'output_name' => $request->output_names[$index] ?? null,
-                    'subtitle_text' => $request->subtitle_texts[$index] ?? null,
-                ];
+        } else {
+            // Multiple content mode: use individual inputs
+            $batchTexts = $request->input('batch_texts', []);
+            $batchAudioFiles = $request->file('batch_audio_files') ?: [];
+            $batchImages = $request->file('batch_images') ?: [];
+            $batchBackgroundVideos = $request->file('batch_background_videos') ?: [];
+            $batchSubtitles = $request->input('batch_subtitles', []);
+            $batchOutputNames = $request->input('batch_output_names', []);
+            $batchDurations = $request->input('batch_durations', []);
+            $batchTransitions = $request->input('batch_transitions', []);
+            $batchVolumes = $request->input('batch_volumes', []);
+
+            // Get the maximum count from all arrays
+            $maxCount = max(
+                count($batchTexts),
+                count($batchAudioFiles),
+                count($batchImages),
+                count($batchBackgroundVideos),
+                count($batchSubtitles),
+                count($batchOutputNames)
+            );
+
+            for ($i = 1; $i <= $maxCount; $i++) {
+                $hasContent = !empty($batchTexts[$i]) ||
+                             !empty($batchAudioFiles[$i]) ||
+                             !empty($batchImages[$i]) ||
+                             !empty($batchBackgroundVideos[$i]);
+
+                if ($hasContent) {
+                    $audioSource = 'none';
+                    if (!empty($batchTexts[$i])) {
+                        $audioSource = 'tts';
+                    } elseif (!empty($batchAudioFiles[$i])) {
+                        $audioSource = 'upload';
+                    }
+
+                    $batchData[] = [
+                        'text_content' => $batchTexts[$i] ?? null,
+                        'audio_source' => $audioSource,
+                        'audio_file' => $batchAudioFiles[$i] ?? null,
+                        'images' => $batchImages[$i] ?? null,
+                        'background_video' => $batchBackgroundVideos[$i] ?? null,
+                        'subtitle_text' => $batchSubtitles[$i] ?? null,
+                        'output_name' => $batchOutputNames[$i] ?? "video_$i",
+                        'duration' => $batchDurations[$i] ?? null,
+                        'transition' => $batchTransitions[$i] ?? 'fade',
+                        'volume' => $batchVolumes[$i] ?? 100,
+                    ];
+                }
             }
-            
-            return $batchData;
         }
+
+        return $batchData;
     }
 
     /**
@@ -286,6 +543,7 @@ class VideoGenerationService
         $baseParams = [
             '--output' => $outputName,
             '--temp-dir' => $tempDir,
+            '--task-id' => uniqid('batch_video_', true),
         ];
 
         // Add subtitle parameters if enabled
@@ -301,14 +559,66 @@ class VideoGenerationService
             ]);
         }
 
-        if ($platform === 'tiktok') {
+        if ($platform === 'none') {
+            // Parameters for videos without channel publishing
             $params = array_merge($baseParams, [
-                '--script' => $videoData['script'],
+                '--platform' => 'none',
+                '--media-type' => $request->media_type ?: 'images',
+            ]);
+
+            // Only add script if using TTS and have TTS text
+            if (!empty($videoData['script']) && $request->audio_source === 'tts') {
+                $params['--script'] = $videoData['script'];
+            }
+
+            // Video settings from none-specific fields
+            if ($request->none_resolution) {
+                $params['--resolution'] = $request->none_resolution;
+            }
+            if ($request->none_fps) {
+                $params['--fps'] = $request->none_fps;
+            }
+            if ($request->none_quality) {
+                $params['--quality'] = $request->none_quality;
+            }
+
+            // Handle file uploads
+            if ($videoData['product_video']) {
+                $videoPath = $this->saveUploadedFile($videoData['product_video'], $tempDir, 'product_video.' . $videoData['product_video']->getClientOriginalExtension());
+                $params['--product-video'] = $videoPath;
+            }
+
+            if ($videoData['product_image']) {
+                $imagePath = $this->saveUploadedFile($videoData['product_image'], $tempDir, 'product_image.' . $videoData['product_image']->getClientOriginalExtension());
+                $params['--product-image'] = $imagePath;
+            }
+
+            return $params;
+        } elseif ($platform === 'tiktok') {
+            $params = array_merge($baseParams, [
                 '--voice' => $request->voice,
                 '--bitrate' => $request->bitrate,
                 '--speed' => $request->speed,
                 '--volume' => $request->volume,
             ]);
+
+            // Only add script if using TTS and have TTS text
+            if (!empty($videoData['script']) && $request->audio_source === 'tts') {
+                $params['--script'] = $videoData['script'];
+            }
+
+            // Handle audio source for TikTok batch
+            if ($videoData['audio_file']) {
+                $audioPath = $this->saveUploadedFile($videoData['audio_file'], $tempDir, 'audio.' . $videoData['audio_file']->getClientOriginalExtension());
+                $params['--audio-file'] = $audioPath;
+            } elseif ($videoData['audio_source'] === 'library' && !empty($videoData['library_audio_id'])) {
+                $params['--library-audio-id'] = $videoData['library_audio_id'];
+                // Increment usage count
+                $audioLibrary = \App\Models\AudioLibrary::find($videoData['library_audio_id']);
+                if ($audioLibrary) {
+                    $audioLibrary->incrementUsage();
+                }
+            }
 
             // Handle file uploads
             if ($videoData['product_video']) {
@@ -340,6 +650,13 @@ class VideoGenerationService
             } elseif ($videoData['audio_file']) {
                 $audioPath = $this->saveUploadedFile($videoData['audio_file'], $tempDir, 'audio.' . $videoData['audio_file']->getClientOriginalExtension());
                 $params['--audio-file'] = $audioPath;
+            } elseif ($videoData['audio_source'] === 'library' && !empty($videoData['library_audio_id'])) {
+                $params['--library-audio-id'] = $videoData['library_audio_id'];
+                // Increment usage count
+                $audioLibrary = \App\Models\AudioLibrary::find($videoData['library_audio_id']);
+                if ($audioLibrary) {
+                    $audioLibrary->incrementUsage();
+                }
             }
 
             // Handle images and videos
@@ -378,18 +695,37 @@ class VideoGenerationService
     {
         $baseTime = 180; // 3 minutes base time
         
-        if ($platform === 'tiktok') {
+        if ($platform === 'none') {
+            // For videos without channel publishing, use similar estimation as TikTok
             $script = $videoData['script'] ?? $request->script_text ?? '';
             $scriptLength = strlen($script);
-            
+
             // Estimate based on script length (roughly 1 minute per 100 characters)
             $estimatedTime = $baseTime + ($scriptLength / 100) * 60;
-            
+
             // Add time for subtitle processing
             if ($request->boolean('enable_subtitle')) {
                 $estimatedTime += 30;
             }
-            
+
+            // Add time based on media type
+            $mediaType = $request->media_type ?: 'images';
+            if ($mediaType === 'video') {
+                $estimatedTime += 60; // Extra time for video processing
+            }
+
+        } elseif ($platform === 'tiktok') {
+            $script = $videoData['script'] ?? $request->script_text ?? '';
+            $scriptLength = strlen($script);
+
+            // Estimate based on script length (roughly 1 minute per 100 characters)
+            $estimatedTime = $baseTime + ($scriptLength / 100) * 60;
+
+            // Add time for subtitle processing
+            if ($request->boolean('enable_subtitle')) {
+                $estimatedTime += 30;
+            }
+
         } else { // youtube
             $estimatedTime = $baseTime;
             

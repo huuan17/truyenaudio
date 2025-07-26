@@ -9,15 +9,19 @@
             <label class="form-label">Nguồn âm thanh</label>
             <div class="btn-group btn-group-toggle d-block" data-toggle="buttons">
                 <label class="btn btn-outline-success active mr-2 mb-2">
-                    <input type="radio" name="audio_source" value="tts" checked> 
+                    <input type="radio" name="audio_source" value="tts" checked>
                     <i class="fas fa-microphone mr-1"></i>Text-to-Speech
                 </label>
                 <label class="btn btn-outline-success mr-2 mb-2">
-                    <input type="radio" name="audio_source" value="upload"> 
+                    <input type="radio" name="audio_source" value="upload">
                     <i class="fas fa-upload mr-1"></i>Upload file âm thanh
                 </label>
+                <label class="btn btn-outline-success mr-2 mb-2">
+                    <input type="radio" name="audio_source" value="library">
+                    <i class="fas fa-music mr-1"></i>Từ thư viện
+                </label>
                 <label class="btn btn-outline-success mb-2">
-                    <input type="radio" name="audio_source" value="none"> 
+                    <input type="radio" name="audio_source" value="none">
                     <i class="fas fa-volume-mute mr-1"></i>Không có âm thanh
                 </label>
             </div>
@@ -121,5 +125,80 @@
                 Thích hợp cho video cần thêm nhạc nền sau này.
             </div>
         </div>
+
+        <!-- Library Audio Section -->
+        <div id="library-audio-section" style="display: none;">
+            <div class="form-group">
+                <label>🎵 Chọn từ Thư viện Audio</label>
+                <div class="audio-library-selector">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <input type="text" id="library-search" class="form-control"
+                                   placeholder="Tìm kiếm audio...">
+                        </div>
+                        <div class="col-md-3">
+                            <select id="library-category" class="form-control">
+                                <option value="">Tất cả danh mục</option>
+                                <option value="story">Truyện audio</option>
+                                <option value="music">Nhạc nền</option>
+                                <option value="voice">Giọng đọc</option>
+                                <option value="effect">Hiệu ứng</option>
+                                <option value="podcast">Podcast</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-primary btn-block" onclick="searchAudioLibrary()">
+                                <i class="fas fa-search mr-1"></i>Tìm
+                            </button>
+                        </div>
+                    </div>
+                    <div id="library-results" class="library-results" style="max-height: 300px; overflow-y: auto; border: 1px solid #e3e6f0; border-radius: 0.35rem; padding: 1rem;">
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-music fa-2x mb-2"></i>
+                            <p>Tìm kiếm audio trong thư viện</p>
+                            <a href="{{ route('admin.audio-library.index') }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-external-link-alt mr-1"></i>Mở Thư viện
+                            </a>
+                        </div>
+                    </div>
+                    <input type="hidden" name="library_audio_id" id="library_audio_id">
+                    <div id="selected-audio-info" class="selected-audio-info mt-2" style="display: none;">
+                        <div class="alert alert-success">
+                            <strong>Đã chọn:</strong> <span id="selected-audio-title"></span>
+                            <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="clearSelectedAudio()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<style>
+.audio-library-selector .library-results {
+    background: #fff;
+}
+
+.audio-item {
+    transition: background-color 0.2s ease;
+}
+
+.audio-item:hover {
+    background-color: #f8f9fc !important;
+}
+
+.audio-item.bg-light {
+    background-color: #e3f2fd !important;
+    border-left: 3px solid #007bff;
+}
+
+.selected-audio-info .alert {
+    margin-bottom: 0;
+}
+
+.border-danger {
+    border-color: #dc3545 !important;
+}
+</style>

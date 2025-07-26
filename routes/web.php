@@ -8,6 +8,9 @@ use App\Http\Controllers\Admin\GenreController;
 use App\Http\Controllers\CrawlController;
 use App\Http\Controllers\TextToSpeechController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\QueueHelpController;
+use App\Http\Controllers\Admin\HelpController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Auth\LoginController;
 
 /*
@@ -26,6 +29,18 @@ Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
+// CSRF refresh route
+Route::get('/csrf-token', function() {
+    return response()->json(['token' => csrf_token()]);
+})->name('csrf.token');
+
+// Clear session route for debugging
+Route::get('/clear-session', function() {
+    session()->flush();
+    session()->regenerate();
+    return redirect()->route('login')->with('success', 'Session đã được xóa. Vui lòng đăng nhập lại.');
+})->name('clear.session');
+
 // Frontend routes (public)
 Route::get('/', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 Route::get('/search', [App\Http\Controllers\HomeController::class, 'search'])->name('search');
@@ -40,6 +55,11 @@ Route::get('/story/{storySlug}/chapter/{chapterNumber}', [App\Http\Controllers\H
 
 // Protected routes (require authentication)
 Route::middleware(['auth'])->group(function () {
+    // Admin root redirect
+    Route::get('/admin', function() {
+        return redirect()->route('admin.dashboard');
+    });
+
     // Admin routes with /admin prefix
     Route::prefix('admin')->name('admin.')->group(function () {
         // Dashboard
@@ -65,7 +85,7 @@ Route::middleware(['auth'])->group(function () {
 
         // Smart crawl (re-crawl missing chapters only)
         Route::get('/stories/{story}/smart-crawl', [StoryController::class, 'smartCrawl'])->name('stories.smart-crawl');
-        Route::post('/stories/{story}/smart-crawl', [StoryController::class, 'smartCrawl'])->name('stories.smart-crawl');
+        Route::post('/stories/{story}/smart-crawl', [StoryController::class, 'executeSmartCrawl'])->name('stories.execute-smart-crawl');
 
         // Cancel crawl and queue management
         Route::post('/stories/{story}/cancel-crawl', [StoryController::class, 'cancelCrawl'])->name('stories.cancel-crawl');
@@ -153,12 +173,151 @@ Route::middleware(['auth'])->group(function () {
 
         // AJAX endpoints for video generator
         Route::post('/video-generator/calculate-duration', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'calculateDuration'])->name('video-generator.calculate-duration');
+
+        // Video Management
+        Route::get('/videos', [App\Http\Controllers\Admin\VideoManagementController::class, 'index'])->name('videos.index');
+        Route::get('/videos/{video}', [App\Http\Controllers\Admin\VideoManagementController::class, 'show'])->name('videos.show');
+        Route::get('/videos/{video}/edit', [App\Http\Controllers\Admin\VideoManagementController::class, 'edit'])->name('videos.edit');
+        Route::put('/videos/{video}', [App\Http\Controllers\Admin\VideoManagementController::class, 'update'])->name('videos.update');
+        Route::delete('/videos/{video}', [App\Http\Controllers\Admin\VideoManagementController::class, 'destroy'])->name('videos.destroy');
+        Route::get('/videos/{video}/download', [App\Http\Controllers\Admin\VideoManagementController::class, 'download'])->name('videos.download');
+        Route::get('/videos/{video}/preview', [App\Http\Controllers\Admin\VideoManagementController::class, 'preview'])->name('videos.preview');
+        Route::post('/videos/bulk-action', [App\Http\Controllers\Admin\VideoManagementController::class, 'bulkAction'])->name('videos.bulk-action');
         Route::post('/video-generator/validate-media', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'validateMedia'])->name('video-generator.validate-media');
         Route::get('/video-generator/logo-library', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'getLogoLibrary'])->name('video-generator.logo-library');
+        Route::post('/video-generator/generate-from-template', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generateFromTemplate'])->name('video-generator.generate-from-template');
+
+        // Video Template routes
+        Route::resource('video-templates', App\Http\Controllers\Admin\VideoTemplateController::class)
+              ->middleware(\App\Http\Middleware\LogRequests::class);
+        Route::get('/video-templates/{videoTemplate}/use', [App\Http\Controllers\Admin\VideoTemplateController::class, 'use'])->name('video-templates.use');
+        Route::post('/video-templates/{videoTemplate}/duplicate', [App\Http\Controllers\Admin\VideoTemplateController::class, 'duplicate'])->name('video-templates.duplicate');
+
+        // Log Viewer routes
+        Route::get('/logs', [App\Http\Controllers\Admin\LogViewerController::class, 'index'])->name('logs.index');
+        Route::get('/logs/download', [App\Http\Controllers\Admin\LogViewerController::class, 'download'])->name('logs.download');
+        Route::post('/logs/clear', [App\Http\Controllers\Admin\LogViewerController::class, 'clear'])->name('logs.clear');
+        Route::get('/logs/ajax', [App\Http\Controllers\Admin\LogViewerController::class, 'ajax'])->name('logs.ajax');
+
+        // Upload limits check route
+        Route::get('/check-upload-limits', function() {
+            $postMaxSize = ini_get('post_max_size');
+            $uploadMaxFilesize = ini_get('upload_max_filesize');
+            $maxFileUploads = ini_get('max_file_uploads');
+            $memoryLimit = ini_get('memory_limit');
+            $maxExecutionTime = ini_get('max_execution_time');
+
+            // Parse sizes to bytes
+            $parseSize = function($size) {
+                $unit = preg_replace('/[^bkmgtpezy]/i', '', $size);
+                $size = preg_replace('/[^0-9\.]/', '', $size);
+                if ($unit) {
+                    return round($size * pow(1024, stripos('bkmgtpezy', $unit[0])));
+                }
+                return round($size);
+            };
+
+            $postMaxSizeBytes = $parseSize($postMaxSize);
+            $uploadMaxFilesizeBytes = $parseSize($uploadMaxFilesize);
+            $memoryLimitBytes = $parseSize($memoryLimit);
+
+            return response()->json([
+                'limits' => [
+                    'post_max_size' => $postMaxSize,
+                    'post_max_size_bytes' => $postMaxSizeBytes,
+                    'upload_max_filesize' => $uploadMaxFilesize,
+                    'upload_max_filesize_bytes' => $uploadMaxFilesizeBytes,
+                    'max_file_uploads' => (int)$maxFileUploads,
+                    'memory_limit' => $memoryLimit,
+                    'memory_limit_bytes' => $memoryLimitBytes,
+                    'max_execution_time' => (int)$maxExecutionTime
+                ],
+                'recommendations' => [
+                    'max_total_upload' => min($postMaxSizeBytes * 0.9, $memoryLimitBytes * 0.8),
+                    'max_single_file' => $uploadMaxFilesizeBytes,
+                    'max_files' => (int)$maxFileUploads
+                ],
+                'formatted' => [
+                    'max_total_upload' => number_format(min($postMaxSizeBytes * 0.9, $memoryLimitBytes * 0.8) / 1024 / 1024, 1) . 'MB',
+                    'max_single_file' => number_format($uploadMaxFilesizeBytes / 1024 / 1024, 1) . 'MB'
+                ]
+            ]);
+        })->name('check-upload-limits');
+
+        // Test audio library route
+        Route::get('/test-audio-library', function() {
+            $audioLibrary = \App\Models\AudioLibrary::take(5)->get();
+
+            $results = [];
+            foreach ($audioLibrary as $audio) {
+                $results[] = [
+                    'id' => $audio->id,
+                    'title' => $audio->title,
+                    'file_path' => $audio->file_path,
+                    'file_exists' => $audio->fileExists(),
+                    'full_path' => $audio->getFullPath(),
+                    'usage_count' => $audio->getUsageCount(),
+                    'last_used_at' => $audio->getLastUsedAt()
+                ];
+            }
+
+            return response()->json([
+                'message' => 'Audio library test completed',
+                'total_audio_files' => \App\Models\AudioLibrary::count(),
+                'sample_files' => $results
+            ]);
+        })->name('test-audio-library');
+
+        // Test logging route
+        Route::get('/test-logging', function() {
+            $logger = new \App\Services\CustomLoggerService();
+
+            $logger->logInfo('video-template', 'Test log entry created', [
+                'test_data' => 'This is a test',
+                'timestamp' => now(),
+                'user' => auth()->user()->name ?? 'Guest'
+            ]);
+
+            $logger->logError('video-template', 'Test error log entry', [
+                'error_type' => 'test_error',
+                'test_data' => 'This is a test error'
+            ], new \Exception('This is a test exception'));
+
+            return response()->json([
+                'message' => 'Test logs created successfully',
+                'check_command' => 'php artisan logs:view video-template'
+            ]);
+        })->name('test-logging');
+
+        // Audio Library routes (custom routes first to avoid conflicts)
+        Route::post('/audio-library/store-multiple', [App\Http\Controllers\Admin\AudioLibraryController::class, 'storeMultiple'])
+             ->name('audio-library.store-multiple')
+             ->middleware('handle.large.uploads');
+        Route::post('/audio-library/bulk-action', [App\Http\Controllers\Admin\AudioLibraryController::class, 'bulkAction'])->name('audio-library.bulk-action');
+        Route::get('/audio-library/export', [App\Http\Controllers\Admin\AudioLibraryController::class, 'export'])->name('audio-library.export');
+        Route::get('/audio-library/batch-list', [App\Http\Controllers\Admin\AudioLibraryController::class, 'batchList'])->name('audio-library.batch-list');
+        Route::get('/audio-library/batch-status/{batch}', [App\Http\Controllers\Admin\AudioLibraryController::class, 'batchStatus'])->name('audio-library.batch-status');
+        Route::get('/api/audio-library/batch-status/{batch}', [App\Http\Controllers\Admin\AudioLibraryController::class, 'getBatchStatus'])->name('audio-library.api-batch-status');
+        Route::get('/audio-library/{audioLibrary}/download', [App\Http\Controllers\Admin\AudioLibraryController::class, 'download'])->name('audio-library.download');
+        Route::get('/audio-library/{audioLibrary}/stream', [App\Http\Controllers\Admin\AudioLibraryController::class, 'stream'])->name('audio-library.stream');
+        Route::post('/audio-library/import-story', [App\Http\Controllers\Admin\AudioLibraryController::class, 'importStoryAudios'])->name('audio-library.import-story');
+        Route::get('/api/audio-library/for-video-generator', [App\Http\Controllers\Admin\AudioLibraryController::class, 'getForVideoGenerator'])->name('audio-library.for-video-generator');
+        Route::get('/api/audio-library/random-background-music', [App\Http\Controllers\Admin\AudioLibraryController::class, 'getRandomBackgroundMusic'])->name('audio-library.random-background-music');
+        Route::get('/api/audio-library/upload-limits', [App\Http\Controllers\Admin\AudioLibraryController::class, 'getUploadLimits'])->name('audio-library.upload-limits');
+
+        // System Configuration routes
+        Route::get('/system/upload-config', [App\Http\Controllers\Admin\SystemConfigController::class, 'uploadConfig'])->name('system.upload-config');
+        Route::get('/system/upload-config-api', [App\Http\Controllers\Admin\SystemConfigController::class, 'getUploadConfig'])->name('system.upload-config-api');
+        Route::get('/system/test-upload-limits', [App\Http\Controllers\Admin\SystemConfigController::class, 'testUploadLimits'])->name('system.test-upload-limits');
+        Route::get('/system/generate-instructions', [App\Http\Controllers\Admin\SystemConfigController::class, 'generateInstructions'])->name('system.generate-instructions');
+
+        // Audio Library resource routes (must be last)
+        Route::resource('audio-library', App\Http\Controllers\Admin\AudioLibraryController::class);
 
         // Video Queue Management
         Route::get('/video-queue', [App\Http\Controllers\Admin\VideoQueueController::class, 'index'])->name('video-queue.index');
         Route::get('/video-queue/status', [App\Http\Controllers\Admin\VideoQueueController::class, 'status'])->name('video-queue.status');
+        Route::get('/video-queue/worker-status', [App\Http\Controllers\Admin\VideoQueueController::class, 'getWorkerStatus'])->name('video-queue.worker-status');
         Route::post('/video-queue/{taskId}/cancel', [App\Http\Controllers\Admin\VideoQueueController::class, 'cancel'])->name('video-queue.cancel');
         Route::post('/video-queue/{taskId}/retry', [App\Http\Controllers\Admin\VideoQueueController::class, 'retry'])->name('video-queue.retry');
         Route::delete('/video-queue/{taskId}', [App\Http\Controllers\Admin\VideoQueueController::class, 'delete'])->name('video-queue.delete');
@@ -181,9 +340,20 @@ Route::middleware(['auth'])->group(function () {
             return redirect()->route('admin.users.index')->with('info', 'Quản lý vai trò đang được phát triển');
         })->name('roles.index');
 
-        Route::get('/settings', function() {
-            return view('admin.settings.index');
-        })->name('settings.index');
+        // Settings Management
+        Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+        Route::get('/settings/create', [SettingsController::class, 'create'])->name('settings.create');
+        Route::post('/settings', [SettingsController::class, 'store'])->name('settings.store');
+        Route::get('/settings/{id}/edit', [SettingsController::class, 'edit'])->name('settings.edit');
+        Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+        Route::delete('/settings/{id}', [SettingsController::class, 'destroy'])->name('settings.destroy');
+        Route::post('/settings/initialize', [SettingsController::class, 'initialize'])->name('settings.initialize');
+
+        // Queue Workers Help
+        Route::get('/help/queue-workers', [QueueHelpController::class, 'index'])->name('help.queue-workers');
+        Route::get('/help/queue-status', [QueueHelpController::class, 'getQueueStatus'])->name('help.queue-status');
+        Route::post('/help/queue-command', [QueueHelpController::class, 'executeCommand'])->name('help.queue-command');
+        Route::post('/help/create-queue-tables', [QueueHelpController::class, 'createQueueTables'])->name('help.create-queue-tables');
 
         // TTS Monitor
         Route::get('/tts-monitor', [App\Http\Controllers\Admin\TtsMonitorController::class, 'index'])->name('tts-monitor.index');
@@ -208,17 +378,17 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/crawl-monitor/clear-queue', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'clearQueue'])->name('crawl-monitor.clear-queue');
         Route::post('/crawl-monitor/add-to-queue', [App\Http\Controllers\Admin\CrawlMonitorController::class, 'addToQueue'])->name('crawl-monitor.add-to-queue');
 
-        Route::get('/help', function() {
-            return view('admin.help.index');
-        })->name('help.index');
-
-        Route::get('/help/{slug}', function($slug) {
-            return view('admin.help.show', compact('slug'));
-        })->name('help.show');
+        Route::get('/help', [HelpController::class, 'index'])->name('help.index');
+        Route::get('/help/{section}', [HelpController::class, 'show'])->name('help.show');
 
         Route::get('/help-quick-reference', function() {
             return view('admin.help.quick-reference');
         })->name('help.quick-reference');
+
+        // Test tracking route
+        Route::get('/test-tracking', function() {
+            return view('test-tracking');
+        })->name('test.tracking');
 
 
 

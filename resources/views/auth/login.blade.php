@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Đăng nhập - Audio Lara</title>
 
     <!-- Google Font: Source Sans Pro -->
@@ -39,7 +40,7 @@
                 </div>
             @endif
 
-            <form action="{{ route('login') }}" method="post">
+            <form action="{{ route('login') }}" method="post" id="loginForm">
                 @csrf
                 <div class="input-group mb-3">
                     <input type="email" name="email" class="form-control @error('email') is-invalid @enderror" 
@@ -96,5 +97,45 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
 <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Refresh CSRF token every 10 minutes
+    setInterval(function() {
+        $.get('{{ route("csrf.token") }}', function(data) {
+            if (data.token) {
+                $('input[name="_token"]').val(data.token);
+                $('meta[name="csrf-token"]').attr('content', data.token);
+            }
+        }).fail(function() {
+            // If CSRF refresh fails, reload the page
+            console.log('CSRF token refresh failed, reloading page...');
+            window.location.reload();
+        });
+    }, 10 * 60 * 1000); // 10 minutes
+
+    // Handle form submission
+    $('#loginForm').on('submit', function(e) {
+        var submitBtn = $(this).find('button[type="submit"]');
+        submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Đang đăng nhập...');
+
+        // Get fresh CSRF token before submit
+        $.get('{{ route("csrf.token") }}', function(data) {
+            if (data.token) {
+                $('input[name="_token"]').val(data.token);
+                $('meta[name="csrf-token"]').attr('content', data.token);
+            }
+        });
+
+        // Re-enable button after 10 seconds to prevent permanent disable
+        setTimeout(function() {
+            submitBtn.prop('disabled', false).html('Đăng nhập');
+        }, 10000);
+    });
+
+    // Auto-focus on email field
+    $('input[name="email"]').focus();
+});
+</script>
 </body>
 </html>

@@ -28,6 +28,15 @@ class LoginController extends Controller
      */
     public function login(Request $request)
     {
+        // Log login attempt
+        \Log::info('Login attempt', [
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'session_id' => $request->session()->getId(),
+            'csrf_token_present' => $request->has('_token'),
+            'csrf_token_valid' => hash_equals($request->session()->token(), $request->input('_token', '')),
+        ]);
+
         $request->validate([
             'email' => 'required|email',
             'password' => 'required|min:6',
@@ -42,17 +51,20 @@ class LoginController extends Controller
         $remember = $request->has('remember');
 
         if (Auth::attempt($credentials, $remember)) {
+            // Regenerate session to prevent session fixation
             $request->session()->regenerate();
 
-            // Debug logging
+            // Clear any previous intended URL
+            $request->session()->forget('url.intended');
+
+            // Log successful login
             \Log::info('Login successful', [
                 'user_id' => Auth::id(),
                 'user_email' => Auth::user()->email,
                 'is_admin' => Auth::user()->isAdmin(),
-                'intended_url' => session()->get('url.intended'),
-                'dashboard_route' => route('admin.dashboard'),
             ]);
 
+            // Force redirect to admin dashboard
             return redirect()->intended(route('admin.dashboard'))
                 ->with('success', 'Đăng nhập thành công!');
         }

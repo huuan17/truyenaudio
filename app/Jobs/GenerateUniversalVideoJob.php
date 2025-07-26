@@ -141,9 +141,10 @@ class GenerateUniversalVideoJob implements ShouldQueue
      */
     private function executeVideoGeneration()
     {
-        // Add task ID for progress tracking
+        // Add required parameters
+        $this->parameters['--platform'] = $this->platform;
         $this->parameters['--task-id'] = $this->taskId;
-        
+
         return Artisan::call('video:generate', $this->parameters);
     }
 

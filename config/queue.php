@@ -50,6 +50,14 @@ return [
             'after_commit' => false,
         ],
 
+        'database_video' => [
+            'driver' => 'database',
+            'table' => 'jobs',
+            'queue' => 'video',
+            'retry_after' => 7200, // 2 hours for video jobs
+            'after_commit' => false,
+        ],
+
         'beanstalkd' => [
             'driver' => 'beanstalkd',
             'host' => 'localhost',

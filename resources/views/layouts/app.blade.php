@@ -582,13 +582,13 @@
           </li>
 
           <!-- 2. Tạo Video (Collapsible) -->
-          <li class="nav-item {{ request()->routeIs('admin.logos.*') || request()->routeIs('admin.video-generator.*') || request()->routeIs('admin.video-queue.*') ? 'menu-open' : '' }}">
-            <a href="#" class="nav-link {{ request()->routeIs('admin.logos.*') || request()->routeIs('admin.video-generator.*') || request()->routeIs('admin.video-queue.*') ? 'active' : '' }}">
+          <li class="nav-item {{ request()->routeIs('admin.logos.*') || request()->routeIs('admin.video-generator.*') || request()->routeIs('admin.video-templates.*') || request()->routeIs('admin.audio-library.*') || request()->routeIs('admin.video-queue.*') || request()->routeIs('admin.videos.*') ? 'menu-open' : '' }}">
+            <a href="#" class="nav-link {{ request()->routeIs('admin.logos.*') || request()->routeIs('admin.video-generator.*') || request()->routeIs('admin.video-templates.*') || request()->routeIs('admin.audio-library.*') || request()->routeIs('admin.video-queue.*') || request()->routeIs('admin.videos.*') ? 'active' : '' }}">
               <i class="nav-icon fas fa-video text-primary"></i>
               <p>
                 Tạo Video
                 <i class="fas fa-angle-left right"></i>
-                <span class="badge badge-info right">3</span>
+                <span class="badge badge-info right">6</span>
               </p>
             </a>
             <ul class="nav nav-treeview">
@@ -606,9 +606,29 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a href="{{ route('admin.video-templates.index') }}" class="nav-link {{ request()->routeIs('admin.video-templates.*') ? 'active' : '' }}">
+                  <i class="fas fa-layer-group nav-icon text-warning"></i>
+                  <p>Template Video</p>
+                  <span class="badge badge-warning right">New</span>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.audio-library.index') }}" class="nav-link {{ request()->routeIs('admin.audio-library.*') ? 'active' : '' }}">
+                  <i class="fas fa-music nav-icon text-success"></i>
+                  <p>Thư viện Audio</p>
+                  <span class="badge badge-success right">New</span>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="{{ route('admin.video-queue.index') }}" class="nav-link {{ request()->routeIs('admin.video-queue.*') ? 'active' : '' }}">
                   <i class="fas fa-tasks nav-icon text-info"></i>
                   <p>Trạng thái xử lý</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.videos.index') }}" class="nav-link {{ request()->routeIs('admin.videos.*') ? 'active' : '' }}">
+                  <i class="fas fa-folder-open nav-icon text-success"></i>
+                  <p>Quản lý Video</p>
                 </a>
               </li>
             </ul>
@@ -721,8 +741,8 @@
 
           <!-- 5. Quản trị hệ thống (Collapsible) -->
           @if(auth()->user()->isAdmin())
-          <li class="nav-item {{ request()->routeIs('admin.settings.*') ? 'menu-open' : '' }}">
-            <a href="#" class="nav-link {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">
+          <li class="nav-item {{ request()->routeIs('admin.settings.*') || request()->routeIs('admin.system.*') || request()->routeIs('admin.logs.*') ? 'menu-open' : '' }}">
+            <a href="#" class="nav-link {{ request()->routeIs('admin.settings.*') || request()->routeIs('admin.system.*') || request()->routeIs('admin.logs.*') ? 'active' : '' }}">
               <i class="nav-icon fas fa-cogs text-danger"></i>
               <p>
                 Quản trị hệ thống
@@ -737,6 +757,18 @@
                   <p>Cài đặt hệ thống</p>
                 </a>
               </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.system.upload-config') }}" class="nav-link {{ request()->routeIs('admin.system.*') ? 'active' : '' }}">
+                  <i class="fas fa-upload nav-icon"></i>
+                  <p>Cấu hình Upload</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.logs.index') }}" class="nav-link {{ request()->routeIs('admin.logs.*') ? 'active' : '' }}">
+                  <i class="fas fa-file-alt nav-icon"></i>
+                  <p>System Logs</p>
+                </a>
+              </li>
             </ul>
           </li>
           @endif
@@ -748,7 +780,7 @@
               <p>
                 Trợ giúp & Hướng dẫn
                 <i class="fas fa-angle-left right"></i>
-                <span class="badge badge-info right">6</span>
+                <span class="badge badge-info right">7</span>
               </p>
             </a>
             <ul class="nav nav-treeview">
@@ -786,6 +818,13 @@
                 <a href="{{ route('admin.help.show', 'queue') }}" class="nav-link {{ request()->routeIs('admin.help.show') && request()->route('section') === 'queue' ? 'active' : '' }}">
                   <i class="fas fa-tasks nav-icon text-dark"></i>
                   <p>Quản lý hàng đợi</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.help.queue-workers') }}" class="nav-link {{ request()->routeIs('admin.help.queue-workers') ? 'active' : '' }}">
+                  <i class="fas fa-cogs nav-icon text-primary"></i>
+                  <p>Queue Workers</p>
+                  <span class="badge badge-warning right">New</span>
                 </a>
               </li>
               <li class="nav-item">
@@ -847,6 +886,11 @@
         <a class="dropdown-item" href="{{ route('admin.help.show', 'video') }}">
           <i class="fas fa-video me-2 text-danger"></i>
           Tạo Video
+        </a>
+        <a class="dropdown-item" href="{{ route('admin.help.queue-workers') }}">
+          <i class="fas fa-cogs me-2 text-primary"></i>
+          Queue Workers
+          <span class="badge badge-warning ml-2">New</span>
         </a>
         <div class="dropdown-divider"></div>
         <a class="dropdown-item" href="{{ route('admin.help.quick-reference') }}">
@@ -1281,6 +1325,59 @@ window.testMenuToggle = testMenuToggle;
 window.initializeCollapsibleMenu = initializeCollapsibleMenu;
 window.collapseAllMenus = collapseAllMenus;
 window.expandAllMenus = expandAllMenus;
+
+// Handle CSRF token refresh and 419 errors
+$(document).ready(function() {
+    // Setup AJAX to include CSRF token
+    $.ajaxSetup({
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        }
+    });
+
+    // Refresh CSRF token every 10 minutes
+    setInterval(function() {
+        $.get('/csrf-token', function(data) {
+            if (data.token) {
+                $('meta[name="csrf-token"]').attr('content', data.token);
+                $('input[name="_token"]').val(data.token);
+                // Update AJAX setup
+                $.ajaxSetup({
+                    headers: {
+                        'X-CSRF-TOKEN': data.token
+                    }
+                });
+            }
+        }).fail(function() {
+            console.log('CSRF token refresh failed');
+        });
+    }, 10 * 60 * 1000); // 10 minutes
+
+    // Handle 419 errors globally
+    $(document).ajaxError(function(event, xhr, settings) {
+        if (xhr.status === 419) {
+            toastr.error('Phiên làm việc đã hết hạn. Trang sẽ được tải lại.');
+            setTimeout(function() {
+                window.location.reload();
+            }, 2000);
+        }
+    });
+
+    // Handle form submissions with fresh CSRF token
+    $('form').on('submit', function(e) {
+        var form = $(this);
+        var tokenInput = form.find('input[name="_token"]');
+
+        if (tokenInput.length > 0) {
+            // Get fresh token before submit
+            $.get('/csrf-token', function(data) {
+                if (data.token) {
+                    tokenInput.val(data.token);
+                }
+            });
+        }
+    });
+});
 </script>
 
 @stack('scripts')

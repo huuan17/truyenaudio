@@ -46,7 +46,38 @@
                     </div>
                 </div>
                 <div class="card-body">
-                    
+
+                    <!-- Queue Worker Status -->
+                    <div class="alert alert-info mb-4">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h5><i class="fas fa-cogs mr-2"></i>Queue Worker Status</h5>
+                                <p class="mb-2">
+                                    <strong>Video Queue Worker:</strong>
+                                    <span id="worker-status" class="badge badge-success">
+                                        <i class="fas fa-circle fa-xs mr-1"></i>Running
+                                    </span>
+                                </p>
+                                <p class="mb-0">
+                                    <small class="text-muted">
+                                        Queue worker đang chạy và sẵn sàng xử lý video generation jobs.
+                                        Nếu worker không chạy, video sẽ không được tạo.
+                                    </small>
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-right">
+                                <button class="btn btn-sm btn-primary" onclick="checkWorkerStatus()">
+                                    <i class="fas fa-sync mr-1"></i>Kiểm tra Worker
+                                </button>
+                                <br><br>
+                                <small class="text-muted">
+                                    Để start worker thủ công:<br>
+                                    <code>php artisan queue:work --queue=video</code>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Queue Statistics -->
                     <div class="row mb-4">
                         <div class="col-md-3">
@@ -423,6 +454,36 @@ function manualRefresh() {
     isUserInteracting = false;
     lastInteractionTime = 0; // Force refresh
     refreshQueueStatus();
+}
+
+// Check queue worker status
+function checkWorkerStatus() {
+    const statusElement = $('#worker-status');
+    const originalContent = statusElement.html();
+
+    // Show loading
+    statusElement.html('<i class="fas fa-spinner fa-spin mr-1"></i>Checking...')
+                 .removeClass('badge-success badge-danger')
+                 .addClass('badge-secondary');
+
+    $.get('{{ route("admin.video-queue.worker-status") }}', function(data) {
+        if (data.worker_running) {
+            statusElement.html('<i class="fas fa-circle fa-xs mr-1"></i>Running')
+                         .removeClass('badge-secondary badge-danger')
+                         .addClass('badge-success');
+            showNotification('Queue worker đang chạy bình thường', 'success', 3000);
+        } else {
+            statusElement.html('<i class="fas fa-times-circle fa-xs mr-1"></i>Stopped')
+                         .removeClass('badge-secondary badge-success')
+                         .addClass('badge-danger');
+            showNotification('Queue worker không chạy! Video sẽ không được xử lý.', 'error', 5000);
+        }
+    }).fail(function() {
+        statusElement.html('<i class="fas fa-question-circle fa-xs mr-1"></i>Unknown')
+                     .removeClass('badge-secondary badge-success')
+                     .addClass('badge-warning');
+        showNotification('Không thể kiểm tra trạng thái worker', 'warning', 3000);
+    });
 }
 
 function updateUserTasksTable(tasks) {

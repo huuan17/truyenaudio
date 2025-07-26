@@ -16,7 +16,7 @@
             <a href="{{ route('admin.settings.initialize') }}" class="btn btn-info">
                 <i class="fas fa-sync mr-1"></i>Khởi tạo mặc định
             </a>
-            <a href="{{ route('test.tracking') }}" class="btn btn-warning" target="_blank">
+            <a href="{{ route('admin.test.tracking') }}" class="btn btn-warning" target="_blank">
                 <i class="fas fa-bug mr-1"></i>Test Tracking
             </a>
         </div>

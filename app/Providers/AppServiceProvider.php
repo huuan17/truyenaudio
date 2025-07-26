@@ -6,6 +6,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Pagination\Paginator;
+use App\Helpers\AdminHelper;
+use App\Services\AssetManager;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -103,6 +105,44 @@ class AppServiceProvider extends ServiceProvider
                     showToast.{$type}('{$message}'" . ($title ? ", '{$title}'" : '') . ");
                 });
             </script>";
+        });
+
+        // Admin helper directives
+        Blade::directive('adminConfig', function ($expression) {
+            return "<?php echo AdminHelper::config($expression); ?>";
+        });
+
+        Blade::directive('ttsVoices', function () {
+            return "<?php echo json_encode(AdminHelper::getTTSVoices()); ?>";
+        });
+
+        Blade::directive('videoResolutions', function () {
+            return "<?php echo json_encode(AdminHelper::getVideoResolutions()); ?>";
+        });
+
+        // Asset management directives
+        Blade::directive('renderCSS', function () {
+            return "<?php echo AssetManager::renderCSS(); ?>";
+        });
+
+        Blade::directive('renderJS', function () {
+            return "<?php echo AssetManager::renderJS(); ?>";
+        });
+
+        Blade::directive('addCSS', function ($expression) {
+            $parts = explode(',', str_replace(['(', ')'], '', $expression));
+            $name = trim($parts[0], '\'"');
+            $path = trim($parts[1], '\'"');
+            $priority = isset($parts[2]) ? (int)trim($parts[2]) : 10;
+            return "<?php AssetManager::addCSS('{$name}', '{$path}', {$priority}); ?>";
+        });
+
+        Blade::directive('addJS', function ($expression) {
+            $parts = explode(',', str_replace(['(', ')'], '', $expression));
+            $name = trim($parts[0], '\'"');
+            $path = trim($parts[1], '\'"');
+            $priority = isset($parts[2]) ? (int)trim($parts[2]) : 10;
+            return "<?php AssetManager::addJS('{$name}', '{$path}', {$priority}); ?>";
         });
     }
 

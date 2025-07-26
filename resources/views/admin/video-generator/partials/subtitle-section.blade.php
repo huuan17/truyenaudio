@@ -43,6 +43,30 @@
                     <strong>Phụ đề tự động:</strong> Hệ thống sẽ tự động tạo phụ đề từ nội dung TTS.
                     Phụ đề sẽ được đồng bộ với âm thanh.
                 </div>
+
+                <!-- Subtitle Timing Mode -->
+                <div class="form-group">
+                    <label class="form-label">Chế độ hiển thị phụ đề</label>
+                    <div class="btn-group btn-group-toggle d-block" data-toggle="buttons">
+                        <label class="btn btn-outline-primary active mr-2 mb-2">
+                            <input type="radio" name="subtitle_timing_mode" value="auto" checked>
+                            <i class="fas fa-magic mr-1"></i>Tự động theo nội dung
+                        </label>
+                        <label class="btn btn-outline-primary mr-2 mb-2">
+                            <input type="radio" name="subtitle_timing_mode" value="image_sync">
+                            <i class="fas fa-images mr-1"></i>Gắn theo ảnh
+                        </label>
+                        <label class="btn btn-outline-primary mb-2">
+                            <input type="radio" name="subtitle_timing_mode" value="custom_timing">
+                            <i class="fas fa-clock mr-1"></i>Tùy chỉnh thời gian
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">
+                        <strong>Tự động:</strong> Phụ đề hiển thị theo thời lượng audio/video<br>
+                        <strong>Gắn theo ảnh:</strong> Mỗi ảnh có phụ đề riêng (cho video từ ảnh)<br>
+                        <strong>Tùy chỉnh:</strong> Bạn tự định thời gian hiển thị
+                    </small>
+                </div>
             </div>
 
             <!-- Manual Subtitle -->
@@ -120,10 +144,76 @@
                 </div>
             </div>
 
+            <!-- Timing Settings -->
+            <div id="timing-settings">
+                <!-- Image Sync Settings -->
+                <div id="image-sync-settings" style="display: none;">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-images mr-2"></i>
+                        <strong>Chế độ gắn theo ảnh:</strong> Phụ đề sẽ được chia đều cho từng ảnh trong slideshow.
+                        Mỗi ảnh sẽ có một phần phụ đề tương ứng.
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="subtitle_per_image">Số từ/câu mỗi ảnh</label>
+                                <select name="subtitle_per_image" id="subtitle_per_image" class="form-control">
+                                    <option value="auto" selected>Tự động chia đều</option>
+                                    <option value="sentence">Theo câu</option>
+                                    <option value="word_count">Theo số từ</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="words_per_image">Số từ mỗi ảnh (nếu chọn theo từ)</label>
+                                <input type="number" name="words_per_image" id="words_per_image"
+                                       class="form-control" value="10" min="5" max="50">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Timing Settings -->
+                <div id="custom-timing-settings" style="display: none;">
+                    <div class="alert alert-info">
+                        <i class="fas fa-clock mr-2"></i>
+                        <strong>Tùy chỉnh thời gian:</strong> Bạn có thể điều chỉnh thời gian hiển thị cho từng đoạn phụ đề.
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="subtitle_duration">Thời gian hiển thị mỗi đoạn (giây)</label>
+                                <input type="number" name="subtitle_duration" id="subtitle_duration"
+                                       class="form-control" value="3" min="1" max="10" step="0.5">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="subtitle_delay">Delay giữa các đoạn (giây)</label>
+                                <input type="number" name="subtitle_delay" id="subtitle_delay"
+                                       class="form-control" value="0.5" min="0" max="3" step="0.1">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="subtitle_fade">Hiệu ứng fade</label>
+                                <select name="subtitle_fade" id="subtitle_fade" class="form-control">
+                                    <option value="none">Không có</option>
+                                    <option value="in" selected>Fade in</option>
+                                    <option value="out">Fade out</option>
+                                    <option value="both">Cả hai</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Advanced Subtitle Settings -->
             <div class="form-group">
                 <div class="form-check">
-                    <input type="checkbox" name="subtitle_outline" id="subtitle_outline" 
+                    <input type="checkbox" name="subtitle_outline" id="subtitle_outline"
                            class="form-check-input" value="1" checked>
                     <label class="form-check-label" for="subtitle_outline">
                         Viền chữ (giúp chữ rõ hơn)
