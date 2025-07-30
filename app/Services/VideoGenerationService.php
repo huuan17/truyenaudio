@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Jobs\GenerateUniversalVideoJob;
 use App\Models\VideoGenerationTask;
+use App\Models\AudioLibrary;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -47,6 +48,317 @@ class VideoGenerationService
                                           ->onQueue('video');
 
         return $task;
+    }
+
+    /**
+     * Generate video with Vietnamese subtitle support (direct processing)
+     */
+    public function generateVideoWithVietnameseSubtitle($requestData)
+    {
+        try {
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: VideoGenerationService with Vietnamese subtitle', [
+                'request_data' => $requestData
+            ]);
+
+            // Use existing logic but force Vietnamese subtitle processing
+            $platform = $requestData['platform'] ?? 'tiktok';
+            $tempDir = $requestData['temp_dir'] ?? storage_path('app/videos/temp/' . uniqid());
+
+            // Ensure temp directory exists
+            if (!File::isDirectory($tempDir)) {
+                File::makeDirectory($tempDir, 0755, true);
+            }
+
+            // Create a mock request object for existing methods
+            $mockRequest = new \Illuminate\Http\Request();
+            $mockRequest->merge($requestData);
+
+            // Use existing parameter preparation but force Vietnamese subtitle
+            $parameters = $this->prepareParameters($platform, $mockRequest, $tempDir);
+
+            // Force Vietnamese subtitle processing
+            $parameters['--force-vietnamese-subtitle'] = true;
+
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: Parameters prepared with Vietnamese subtitle force', [
+                'parameters' => $parameters
+            ]);
+
+            // Execute video generation directly (not queued)
+            return $this->executeVideoGenerationDirect($platform, $parameters, $tempDir);
+
+        } catch (\Exception $e) {
+            Log::error('🔥🔥🔥 FORCE OVERRIDE: Failed to generate video with Vietnamese subtitle', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Execute video generation directly (not queued)
+     */
+    private function executeVideoGenerationDirect($platform, $parameters, $tempDir)
+    {
+        try {
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: Executing video generation directly', [
+                'platform' => $platform,
+                'temp_dir' => $tempDir
+            ]);
+
+            // Use VideoSubtitleService for complete video generation with Vietnamese subtitle
+            $videoSubtitleService = app(\App\Services\VideoSubtitleService::class);
+
+            // Prepare components for complete video generation
+            $components = [];
+
+            // Add images if provided
+            if (isset($parameters['--product-images']) && !empty($parameters['--product-images'])) {
+                $imagePaths = explode(',', $parameters['--product-images']);
+                $components['images'] = $imagePaths;
+            }
+
+            // Add subtitle if provided
+            if (isset($parameters['--subtitle-text']) && !empty($parameters['--subtitle-text'])) {
+                $components['subtitle'] = $parameters['--subtitle-text'];
+            }
+
+            // Add audio if provided
+            if (isset($parameters['--library-audio-id']) && !empty($parameters['--library-audio-id'])) {
+                $audioLibrary = \App\Models\AudioLibrary::find($parameters['--library-audio-id']);
+                if ($audioLibrary) {
+                    $components['audio'] = storage_path('app/' . $audioLibrary->file_path);
+                }
+            }
+
+            // Prepare options for video generation
+            $options = [
+                'final_output_path' => $parameters['--output'] ?? storage_path('app/videos/' . uniqid('vietnamese_') . '.mp4'),
+                'platform' => $platform,
+                'slide_duration' => $parameters['--slide-duration'] ?? 3,
+                'slide_transition' => $parameters['--slide-transition'] ?? 'slide',
+                'subtitle_size' => $parameters['--subtitle-size'] ?? 24,
+                'subtitle_color' => $parameters['--subtitle-color'] ?? 'white',
+                'subtitle_position' => $parameters['--subtitle-position'] ?? 'bottom',
+                'subtitle_font' => $parameters['--subtitle-font'] ?? 'Arial Unicode MS',
+                'force_vietnamese_encoding' => true // Force Vietnamese encoding
+            ];
+
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: Using simple video generation approach', [
+                'components' => array_keys($components),
+                'options' => $options
+            ]);
+
+            // Generate video step by step with Vietnamese subtitle
+            $result = $this->generateVideoStepByStep($components, $options, $tempDir);
+
+            if ($result['success']) {
+                Log::info('🔥🔥🔥 FORCE OVERRIDE: Video generation completed successfully', [
+                    'output_path' => $result['output_path']
+                ]);
+            } else {
+                Log::error('🔥🔥🔥 FORCE OVERRIDE: Video generation failed', [
+                    'error' => $result['error']
+                ]);
+            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error('🔥🔥🔥 FORCE OVERRIDE: Exception in direct video generation', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Generate video step by step with Vietnamese subtitle
+     */
+    private function generateVideoStepByStep($components, $options, $tempDir)
+    {
+        try {
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: Starting step-by-step video generation', [
+                'temp_dir' => $tempDir,
+                'components' => array_keys($components)
+            ]);
+
+            // Step 1: Create base video from images
+            $baseVideoPath = null;
+            if (isset($components['images']) && !empty($components['images'])) {
+                $baseVideoPath = $this->createVideoFromImages($components['images'], $tempDir, $options);
+            }
+
+            if (!$baseVideoPath || !File::exists($baseVideoPath)) {
+                throw new \Exception('Failed to create base video from images');
+            }
+
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: Base video created successfully', [
+                'base_video_path' => $baseVideoPath
+            ]);
+
+            // Step 2: Add Vietnamese subtitle if provided
+            $finalVideoPath = $baseVideoPath;
+            if (isset($components['subtitle']) && !empty($components['subtitle'])) {
+                $videoSubtitleService = app(\App\Services\VideoSubtitleService::class);
+
+                $subtitleOptions = [
+                    'output_path' => $tempDir . '/video_with_vietnamese_subtitle.mp4',
+                    'font_size' => $options['subtitle_size'] ?? 24,
+                    'font_color' => $options['subtitle_color'] ?? 'white',
+                    'position' => $options['subtitle_position'] ?? 'bottom',
+                    'font_name' => $options['subtitle_font'] ?? 'Arial Unicode MS',
+                    'hard_subtitle' => true,
+                    'encoding' => 'UTF-8'
+                ];
+
+                Log::info('🔥🔥🔥 FORCE OVERRIDE: Adding Vietnamese subtitle', [
+                    'subtitle_text_preview' => substr($components['subtitle'], 0, 50),
+                    'subtitle_options' => $subtitleOptions
+                ]);
+
+                $subtitleResult = $videoSubtitleService->createVideoWithVietnameseSubtitle(
+                    $baseVideoPath,
+                    $components['subtitle'],
+                    null, // audio duration
+                    $subtitleOptions
+                );
+
+                if ($subtitleResult['success']) {
+                    $finalVideoPath = $subtitleResult['output_path'];
+                    Log::info('🔥🔥🔥 FORCE OVERRIDE: Vietnamese subtitle added successfully', [
+                        'final_video_path' => $finalVideoPath
+                    ]);
+                } else {
+                    Log::warning('🔥🔥🔥 FORCE OVERRIDE: Failed to add Vietnamese subtitle, using base video', [
+                        'error' => $subtitleResult['error'] ?? 'Unknown error'
+                    ]);
+                }
+            }
+
+            // Step 3: Move to final location
+            $outputPath = $options['final_output_path'] ?? storage_path('app/videos/' . uniqid('vietnamese_') . '.mp4');
+
+            // Ensure output directory exists
+            $outputDir = dirname($outputPath);
+            if (!File::isDirectory($outputDir)) {
+                File::makeDirectory($outputDir, 0755, true);
+            }
+
+            // Copy to final location
+            if (File::exists($finalVideoPath)) {
+                File::copy($finalVideoPath, $outputPath);
+
+                Log::info('🔥🔥🔥 FORCE OVERRIDE: Video moved to final location', [
+                    'output_path' => $outputPath
+                ]);
+
+                return [
+                    'success' => true,
+                    'output_path' => $outputPath
+                ];
+            } else {
+                throw new \Exception('Final video file not found: ' . $finalVideoPath);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('🔥🔥🔥 FORCE OVERRIDE: Failed in step-by-step generation', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Create video from images using FFmpeg
+     */
+    private function createVideoFromImages($imagePaths, $tempDir, $options)
+    {
+        try {
+            $slideDuration = $options['slide_duration'] ?? 3;
+            $outputPath = $tempDir . '/slideshow.mp4';
+
+            Log::info('🔥🔥🔥 FORCE OVERRIDE: Creating slideshow from images', [
+                'image_count' => count($imagePaths),
+                'slide_duration' => $slideDuration,
+                'output_path' => $outputPath
+            ]);
+
+            if (count($imagePaths) === 1) {
+                // Single image - create looping video
+                $imagePath = $imagePaths[0];
+                $totalDuration = $slideDuration * 3; // Minimum duration
+
+                $cmd = "ffmpeg -loop 1 -i \"{$imagePath}\" -vf \"scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080\" -t {$totalDuration} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 25 \"{$outputPath}\" -y";
+
+                Log::info('🔥🔥🔥 FORCE OVERRIDE: Single image FFmpeg command', [
+                    'command' => $cmd
+                ]);
+
+                exec($cmd, $output, $returnCode);
+
+                if ($returnCode === 0 && File::exists($outputPath)) {
+                    Log::info('🔥🔥🔥 FORCE OVERRIDE: Single image video created successfully');
+                    return $outputPath;
+                } else {
+                    throw new \Exception('Failed to create video from single image. Return code: ' . $returnCode);
+                }
+            } else {
+                // Multiple images slideshow
+                $inputListPath = $tempDir . '/images.txt';
+                $inputList = '';
+
+                foreach ($imagePaths as $image) {
+                    $inputList .= "file '" . str_replace('\\', '/', $image) . "'\n";
+                    $inputList .= "duration {$slideDuration}\n";
+                }
+
+                // Add last image again for proper duration
+                if (!empty($imagePaths)) {
+                    $lastImage = end($imagePaths);
+                    $inputList .= "file '" . str_replace('\\', '/', $lastImage) . "'\n";
+                }
+
+                File::put($inputListPath, $inputList);
+
+                $cmd = "ffmpeg -f concat -safe 0 -i \"{$inputListPath}\" -vf \"scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080\" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 25 \"{$outputPath}\" -y";
+
+                Log::info('🔥🔥🔥 FORCE OVERRIDE: Multiple images FFmpeg command', [
+                    'command' => $cmd,
+                    'input_list_content' => $inputList
+                ]);
+
+                exec($cmd, $output, $returnCode);
+
+                if ($returnCode === 0 && File::exists($outputPath)) {
+                    Log::info('🔥🔥🔥 FORCE OVERRIDE: Multiple images video created successfully');
+                    return $outputPath;
+                } else {
+                    throw new \Exception('Failed to create video from multiple images. Return code: ' . $returnCode);
+                }
+            }
+
+        } catch (\Exception $e) {
+            Log::error('🔥🔥🔥 FORCE OVERRIDE: Failed to create video from images', [
+                'error' => $e->getMessage(),
+                'image_paths' => $imagePaths
+            ]);
+            throw $e;
+        }
     }
 
     /**
@@ -262,7 +574,50 @@ class VideoGenerationService
             }
 
             // Handle media files based on type
-            if ($request->media_type === 'images') {
+            $mediaType = $request->input('media_type', 'images');
+            $hasVideo = $request->hasFile('product_video') || $request->hasFile('background_video');
+            $hasImages = $request->hasFile('product_images') || $request->hasFile('images') || $request->hasFile('inputs.images');
+
+            // Log media type detection
+            Log::info('TikTok media type detection', [
+                'original_media_type' => $mediaType,
+                'has_video' => $hasVideo,
+                'has_images' => $hasImages,
+                'video_files' => [
+                    'product_video' => $request->hasFile('product_video'),
+                    'background_video' => $request->hasFile('background_video'),
+                ],
+                'image_files' => [
+                    'product_images' => $request->hasFile('product_images'),
+                    'images' => $request->hasFile('images'),
+                    'inputs.images' => $request->hasFile('inputs.images'),
+                ]
+            ]);
+
+            // Determine actual content type for mixed media
+            if ($mediaType === 'mixed') {
+                if ($hasVideo) {
+                    $actualContentType = 'video';
+                } elseif ($hasImages) {
+                    $actualContentType = 'images';
+                } else {
+                    $actualContentType = 'images'; // Default fallback
+                }
+            } elseif ($mediaType === 'video' && !$hasVideo) {
+                // If video type but no video file, fallback to images
+                $actualContentType = 'images';
+            } else {
+                $actualContentType = $mediaType;
+            }
+
+            Log::info('TikTok final content type', [
+                'original_media_type' => $mediaType,
+                'actual_content_type' => $actualContentType
+            ]);
+
+            $tiktokParams['--media-type'] = $actualContentType;
+
+            if ($actualContentType === 'images') {
                 // Check for images from different sources (template vs direct upload)
                 $imageFiles = null;
 
@@ -286,14 +641,22 @@ class VideoGenerationService
                     }
                     $tiktokParams['--product-images'] = implode(',', $imagePaths);
                 }
-            } elseif ($request->hasFile('product_video') || $request->hasFile('background_video')) {
+            } elseif ($actualContentType === 'video' && $hasVideo) {
                 $videoFile = $request->file('product_video') ?: $request->file('background_video');
                 $videoPath = $videoFile->store("temp/videos", 'local');
                 $tiktokParams['--product-video'] = storage_path("app/{$videoPath}");
             }
 
-            // Handle subtitle (optional)
-            if ($request->boolean('enable_subtitle') && $request->subtitle_text) {
+            // Handle subtitle (optional) - support both checkbox mode and template mode
+            Log::info('TikTok subtitle processing', [
+                'has_enable_subtitle' => $request->has('enable_subtitle'),
+                'enable_subtitle' => $request->boolean('enable_subtitle'),
+                'has_subtitle_text' => $request->has('subtitle_text'),
+                'subtitle_text_preview' => $request->subtitle_text ? substr($request->subtitle_text, 0, 50) : 'none'
+            ]);
+
+            if (($request->boolean('enable_subtitle') && $request->subtitle_text) ||
+                (!$request->has('enable_subtitle') && $request->subtitle_text)) {
                 $tiktokParams['--subtitle-text'] = $request->subtitle_text;
                 $tiktokParams['--subtitle-position'] = $request->subtitle_position ?: 'bottom';
                 $tiktokParams['--subtitle-size'] = $request->subtitle_size ?: 24;
@@ -305,26 +668,82 @@ class VideoGenerationService
                 // Add timing parameters
                 $tiktokParams['--subtitle-timing-mode'] = $request->subtitle_timing_mode ?: 'auto';
                 $tiktokParams['--subtitle-per-image'] = $request->subtitle_per_image ?: 'auto';
+
+                Log::info('TikTok subtitle parameters added', [
+                    'subtitle_text_preview' => substr($request->subtitle_text, 0, 50),
+                    'subtitle_position' => $tiktokParams['--subtitle-position'],
+                    'subtitle_size' => $tiktokParams['--subtitle-size']
+                ]);
                 $tiktokParams['--words-per-image'] = $request->words_per_image ?: 10;
                 $tiktokParams['--subtitle-delay'] = $request->subtitle_delay ?: 0.5;
                 $tiktokParams['--subtitle-fade'] = $request->subtitle_fade ?: 'in';
+            }
 
             // Add duration control parameters
-            if ($request->has('duration_based_on')) {
-                $tiktokParams['--duration-based-on'] = $request->duration_based_on;
+            $durationBasedOn = $request->input('duration_based_on');
+            $customDuration = $request->input('custom_duration');
+            $imageDuration = $request->input('image_duration');
+            $syncWithAudio = $request->input('sync_with_audio');
+            $slideDuration = $request->input('slide_duration');
+
+            // ENHANCED WORKAROUND: Force custom duration for template-based generation
+            if ($slideDuration == 30 && !$durationBasedOn && !$customDuration) {
+                Log::info('TikTok WORKAROUND: Detected template with slide_duration=30, applying custom duration settings');
+                $durationBasedOn = 'custom';
+                $customDuration = 30;
+                $imageDuration = 30;
             }
-            if ($request->has('custom_duration')) {
-                $tiktokParams['--custom-duration'] = $request->custom_duration;
+
+            // ADDITIONAL FIX: If still no duration settings but slide_duration exists, use it
+            if (!$durationBasedOn && $slideDuration) {
+                Log::info('TikTok ADDITIONAL FIX: Using slide_duration as custom_duration', [
+                    'slide_duration' => $slideDuration
+                ]);
+                $durationBasedOn = 'custom';
+                $customDuration = $slideDuration;
+                $imageDuration = $slideDuration;
             }
-            if ($request->has('sync_with_audio')) {
-                $tiktokParams['--sync-with-audio'] = $request->sync_with_audio ? 'true' : 'false';
+
+            Log::info('TikTok duration parameters AFTER workaround', [
+                'duration_based_on' => $durationBasedOn,
+                'custom_duration' => $customDuration,
+                'image_duration' => $imageDuration,
+                'slide_duration' => $slideDuration,
+                'workaround_1_triggered' => ($slideDuration == 30 && $durationBasedOn == 'custom'),
+                'workaround_2_triggered' => (!$durationBasedOn && $slideDuration)
+            ]);
+
+            Log::info('TikTok duration parameters BEFORE workaround', [
+                'duration_based_on' => $durationBasedOn,
+                'custom_duration' => $customDuration,
+                'image_duration' => $imageDuration,
+                'sync_with_audio' => $syncWithAudio,
+                'slide_duration' => $slideDuration,
+                'request_all_keys' => array_keys($request->all())
+            ]);
+
+            // Force add duration parameters if they exist
+            if ($durationBasedOn) {
+                $tiktokParams['--duration-based-on'] = $durationBasedOn;
+                Log::info('Added duration-based-on parameter', ['value' => $durationBasedOn]);
+            }
+            if ($customDuration) {
+                $tiktokParams['--custom-duration'] = $customDuration;
+                Log::info('Added custom-duration parameter', ['value' => $customDuration]);
+            }
+            if ($imageDuration) {
+                $tiktokParams['--image-duration'] = $imageDuration;
+                Log::info('Added image-duration parameter', ['value' => $imageDuration]);
+            }
+            if ($syncWithAudio !== null) {
+                $tiktokParams['--sync-with-audio'] = $syncWithAudio ? 'true' : 'false';
+                Log::info('Added sync-with-audio parameter', ['value' => $syncWithAudio]);
             }
             if ($request->has('max_duration')) {
                 $tiktokParams['--max-duration'] = $request->max_duration;
             }
             if ($request->has('sync_tolerance')) {
                 $tiktokParams['--sync-tolerance'] = $request->sync_tolerance;
-            }
             }
 
             // Handle channel settings (optional)
@@ -341,7 +760,7 @@ class VideoGenerationService
             }
 
             return array_merge($baseParams, $tiktokParams);
-        } else { // youtube
+        } elseif ($platform === 'youtube') {
             $youtubeParams = [
                 '--video-content-type' => $request->video_content_type,
                 '--image-duration' => $request->image_duration ?: 3,

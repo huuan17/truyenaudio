@@ -132,6 +132,26 @@
                                     <textarea name="inputs[{{ $input['name'] }}]"
                                               id="optional_{{ $input['name'] }}" class="form-control"
                                               rows="3" placeholder="{{ $input['placeholder'] ?? '' }}">{{ old('inputs.'.$input['name']) }}</textarea>
+
+                                    <!-- Font Selection for Subtitle -->
+                                    @if(str_contains($input['name'], 'sub') || str_contains($input['name'], 'subtitle'))
+                                    <div class="mt-2">
+                                        <label for="subtitle_font_{{ $input['name'] }}" class="small text-muted">
+                                            <i class="fas fa-font mr-1"></i>Font chữ cho subtitle
+                                        </label>
+                                        <select name="subtitle_font" id="subtitle_font_{{ $input['name'] }}" class="form-control form-control-sm">
+                                            <option value="Lato">Lato (Khuyến nghị cho tiếng Việt)</option>
+                                            <option value="Roboto">Roboto (Hiện đại, dễ đọc)</option>
+                                            <option value="Arial">Arial (Cổ điển)</option>
+                                            <option value="Calibri">Calibri (Mềm mại)</option>
+                                            <option value="Tahoma">Tahoma (Rõ nét)</option>
+                                        </select>
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Lato và Roboto hỗ trợ tốt nhất cho ký tự tiếng Việt
+                                        </small>
+                                    </div>
+                                    @endif
                                               
                                 @elseif($input['type'] === 'audio')
                                     <input type="file" name="inputs[{{ $input['name'] }}]" 
@@ -1005,4 +1025,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
+<!-- Video Preview Script -->
+<script src="{{ asset('js/video-preview.js') }}"></script>
 @endpush

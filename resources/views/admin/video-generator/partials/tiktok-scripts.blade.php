@@ -146,9 +146,25 @@ function updateTiktokSubmitButton() {
 $(document).ready(function() {
     // Initialize TikTok mode
     switchTiktokMode('single');
-    
+
     // Initialize video count
     updateTiktokVideoCount();
     updateTiktokSubmitButton();
+
+    // Initialize TikTok preview
+    if (typeof VideoPreview !== 'undefined') {
+        window.tiktokPreview = new VideoPreview({
+            containerSelector: '.col-lg-4',
+            insertPosition: 'beforeend',
+            formType: 'generator',
+            platform: 'tiktok',
+            customSelectors: {
+                images: ['input[name="product_images[]"]', 'input[id*="tiktok_product_image"]'],
+                audio: ['input[name="background_audio"]'],
+                subtitle: ['textarea[name="scripts[]"]', 'textarea[id*="tiktok_script"]', 'textarea[name="subtitle_texts[]"]'],
+                tts: ['textarea[name="scripts[]"]', 'textarea[id*="tiktok_script"]']
+            }
+        });
+    }
 });
 </script>

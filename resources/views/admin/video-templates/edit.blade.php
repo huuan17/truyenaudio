@@ -298,10 +298,10 @@
                                     </div>
 
                                     <div class="form-group">
-                                        <button type="button" class="btn btn-outline-primary" onclick="updateJsonFromForm()">
+                                        <button type="button" class="btn btn-outline-primary" onclick="updateJsonFromFormManual()">
                                             <i class="fas fa-sync mr-2"></i>Cập nhật JSON từ form
                                         </button>
-                                        <button type="button" class="btn btn-outline-secondary ml-2" onclick="updateFormFromJson()">
+                                        <button type="button" class="btn btn-outline-secondary ml-2" onclick="updateFormFromJsonManual()">
                                             <i class="fas fa-download mr-2"></i>Cập nhật form từ JSON
                                         </button>
                                         <button type="button" class="btn btn-outline-info ml-2" onclick="validateJson()">
@@ -603,8 +603,31 @@ function previewThumbnail(input) {
     }
 }
 
+// Utility Functions
+function showSuccessToast(message) {
+    // Create a subtle toast notification
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-success alert-dismissible fade show position-fixed';
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; opacity: 0.9;';
+    toast.innerHTML = `
+        <i class="fas fa-check-circle mr-2"></i>${message}
+        <button type="button" class="close" data-dismiss="alert">
+            <span>&times;</span>
+        </button>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 3000);
+}
+
 // Settings Builder Functions
-function updateJsonFromForm() {
+function updateJsonFromForm(showAlert = false) {
     const settings = {};
 
     // Collect all form inputs from settings tabs
@@ -652,10 +675,19 @@ function updateJsonFromForm() {
     // Update JSON textarea
     document.getElementById('settings').value = JSON.stringify(settings, null, 2);
 
-    alert('JSON đã được cập nhật từ form!');
+    // Show alert only when explicitly requested (manual updates)
+    if (showAlert) {
+        // Show a subtle success message instead of intrusive alert
+        showSuccessToast('JSON đã được cập nhật từ form!');
+    }
 }
 
-function updateFormFromJson() {
+// Manual update function with alert for button clicks
+function updateJsonFromFormManual() {
+    updateJsonFromForm(true);
+}
+
+function updateFormFromJson(showAlert = false) {
     try {
         const settings = JSON.parse(document.getElementById('settings').value);
 
@@ -700,18 +732,29 @@ function updateFormFromJson() {
             }
         });
 
-        alert('Form đã được cập nhật từ JSON!');
+        // Show alert only when explicitly requested (manual updates)
+        if (showAlert) {
+            showSuccessToast('Form đã được cập nhật từ JSON!');
+        }
     } catch (e) {
+        // Only show alert for actual errors
+        console.error('JSON parsing error:', e.message);
         alert('JSON không hợp lệ: ' + e.message);
     }
+}
+
+// Manual update function with alert for button clicks
+function updateFormFromJsonManual() {
+    updateFormFromJson(true);
 }
 
 function validateJson() {
     try {
         const settings = JSON.parse(document.getElementById('settings').value);
-        alert('JSON hợp lệ! ✓');
+        showSuccessToast('JSON hợp lệ! ✓');
         return true;
     } catch (e) {
+        // Keep alert for errors as they need immediate attention
         alert('JSON không hợp lệ: ' + e.message);
         return false;
     }

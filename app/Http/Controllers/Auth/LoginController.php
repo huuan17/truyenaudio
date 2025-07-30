@@ -54,6 +54,9 @@ class LoginController extends Controller
             // Regenerate session to prevent session fixation
             $request->session()->regenerate();
 
+            // Regenerate CSRF token after session regeneration
+            $request->session()->regenerateToken();
+
             // Clear any previous intended URL
             $request->session()->forget('url.intended');
 
@@ -62,11 +65,19 @@ class LoginController extends Controller
                 'user_id' => Auth::id(),
                 'user_email' => Auth::user()->email,
                 'is_admin' => Auth::user()->isAdmin(),
+                'new_session_id' => $request->session()->getId(),
+                'new_csrf_token' => $request->session()->token(),
             ]);
 
             // Force redirect to admin dashboard
-            return redirect()->intended(route('admin.dashboard'))
-                ->with('success', 'Đăng nhập thành công!');
+            $response = redirect()->intended(route('admin.dashboard'))
+                ->with('success', 'Đăng nhập thành công!')
+                ->with('csrf_token', $request->session()->token());
+
+            // Add CSRF token to response header for JavaScript access
+            $response->header('X-CSRF-TOKEN', $request->session()->token());
+
+            return $response;
         }
 
         return back()->withErrors([

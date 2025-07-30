@@ -97,7 +97,18 @@ class GeneratedVideo extends Model
      */
     public function fileExists()
     {
-        return File::exists($this->file_path);
+        if (empty($this->file_path)) {
+            return false;
+        }
+
+        // Try both absolute and relative paths
+        if (File::exists($this->file_path)) {
+            return true; // Absolute path
+        }
+
+        // Try storage path
+        $storagePath = storage_path('app/' . $this->file_path);
+        return File::exists($storagePath);
     }
 
     /**

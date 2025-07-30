@@ -117,6 +117,25 @@ window.routes = {
 // Initialize page when ready
 $(document).ready(function() {
     console.log('Video Generator page loaded with routes:', window.routes);
+
+    // Initialize preview for video generator
+    if (typeof VideoPreview !== 'undefined') {
+        window.videoPreview = new VideoPreview({
+            containerSelector: '.col-lg-4',
+            insertPosition: 'beforeend',
+            formType: 'generator',
+            platform: 'auto',
+            customSelectors: {
+                images: ['input[name="product_images[]"]', 'input[name="background_images[]"]'],
+                audio: ['input[name="background_audio"]', 'input[name="audio_file"]'],
+                subtitle: ['textarea[name="script_text"]', 'textarea[name="content"]'],
+                tts: ['textarea[name="script_text"]', 'textarea[name="content"]']
+            }
+        });
+    }
 });
 </script>
+
+<!-- Video Preview Script -->
+<script src="{{ asset('js/video-preview.js') }}"></script>
 @endpush

@@ -2227,5 +2227,25 @@ document.getElementById('templateForm').addEventListener('submit', function(e) {
         settingsInput.focus();
     }
 });
+
+// Initialize preview for template creation
+$(document).ready(function() {
+    if (typeof VideoPreview !== 'undefined') {
+        window.videoPreview = new VideoPreview({
+            containerSelector: '.col-lg-4',
+            insertPosition: 'beforeend',
+            formType: 'creator',
+            platform: 'auto',
+            customSelectors: {
+                images: ['input[name="thumbnail"]'],
+                subtitle: ['textarea[name="description"]', 'input[name="name"]'],
+                tts: ['textarea[name="description"]']
+            }
+        });
+    }
+});
 </script>
+
+<!-- Video Preview Script -->
+<script src="{{ asset('js/video-preview.js') }}"></script>
 @endpush

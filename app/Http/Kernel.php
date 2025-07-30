@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'handle.large.uploads' => \App\Http\Middleware\HandleLargeUploads::class,
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
+        'fresh.csrf' => \App\Http\Middleware\EnsureFreshCsrfToken::class,
     ];
 }

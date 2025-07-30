@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test CSRF Token</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <h1>Test CSRF Token</h1>
+    
+    <div id="results"></div>
+    
+    <button onclick="testCsrfToken()">Test CSRF Token</button>
+    <button onclick="refreshCsrfToken()">Refresh CSRF Token</button>
+    <button onclick="testFormSubmit()">Test Form Submit</button>
+    
+    <form id="testForm" action="/admin/dashboard" method="POST" style="margin-top: 20px;">
+        <input type="hidden" name="_token" value="">
+        <input type="text" name="test" value="test data">
+        <button type="submit">Submit Test Form</button>
+    </form>
+
+    <script>
+        function log(message) {
+            $('#results').append('<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>');
+        }
+
+        function testCsrfToken() {
+            $.get('/debug-session', function(data) {
+                log('Session ID: ' + data.session_id);
+                log('CSRF Token: ' + data.csrf_token);
+                log('Session Token: ' + data.session_token);
+                log('User Authenticated: ' + data.user_authenticated);
+                log('User ID: ' + data.user_id);
+            }).fail(function(xhr) {
+                log('Error: ' + xhr.status + ' - ' + xhr.responseText);
+            });
+        }
+
+        function refreshCsrfToken() {
+            $.get('/csrf-token', function(data) {
+                if (data.token) {
+                    $('input[name="_token"]').val(data.token);
+                    log('CSRF Token refreshed: ' + data.token);
+                } else {
+                    log('Failed to get CSRF token');
+                }
+            }).fail(function(xhr) {
+                log('Error refreshing CSRF token: ' + xhr.status);
+            });
+        }
+
+        function testFormSubmit() {
+            // First refresh token
+            refreshCsrfToken();
+            
+            setTimeout(function() {
+                // Then submit form via AJAX
+                var formData = $('#testForm').serialize();
+                
+                $.post('/admin/dashboard', formData, function(data) {
+                    log('Form submitted successfully');
+                }).fail(function(xhr) {
+                    log('Form submission failed: ' + xhr.status + ' - ' + xhr.responseText);
+                    
+                    if (xhr.status === 419) {
+                        log('CSRF Token Mismatch detected');
+                        var response = JSON.parse(xhr.responseText);
+                        if (response.csrf_token) {
+                            $('input[name="_token"]').val(response.csrf_token);
+                            log('New CSRF token received: ' + response.csrf_token);
+                        }
+                    }
+                });
+            }, 500);
+        }
+
+        // Auto-test on page load
+        $(document).ready(function() {
+            log('Page loaded, testing CSRF token...');
+            testCsrfToken();
+        });
+    </script>
+</body>
+</html>

@@ -254,5 +254,21 @@ $(document).ready(function() {
     // Event listeners for dynamic changes
     $(document).on('change', 'input[name="audio_source"]', toggleYoutubeAudioSource);
     $(document).on('change', 'input[name="video_content_type"]', toggleYoutubeVideoContent);
+
+    // Initialize YouTube preview
+    if (typeof VideoPreview !== 'undefined') {
+        window.youtubePreview = new VideoPreview({
+            containerSelector: '.col-lg-4',
+            insertPosition: 'beforeend',
+            formType: 'generator',
+            platform: 'youtube',
+            customSelectors: {
+                images: ['input[name="background_images[]"]', 'input[id*="youtube_images"]'],
+                audio: ['input[name="audio_files[]"]', 'input[id*="youtube_audio_file"]'],
+                subtitle: ['textarea[name="text_contents[]"]', 'textarea[id*="youtube_text_content"]', 'textarea[name="subtitle_texts[]"]'],
+                tts: ['textarea[name="text_contents[]"]', 'textarea[id*="youtube_text_content"]']
+            }
+        });
+    }
 });
 </script>

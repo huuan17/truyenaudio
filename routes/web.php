@@ -41,6 +41,18 @@ Route::get('/clear-session', function() {
     return redirect()->route('login')->with('success', 'Session đã được xóa. Vui lòng đăng nhập lại.');
 })->name('clear.session');
 
+// Debug session and CSRF token
+Route::get('/debug-session', function() {
+    return response()->json([
+        'session_id' => session()->getId(),
+        'csrf_token' => csrf_token(),
+        'session_token' => session()->token(),
+        'user_authenticated' => auth()->check(),
+        'user_id' => auth()->id(),
+        'session_data' => session()->all(),
+    ]);
+})->name('debug.session');
+
 // Frontend routes (public)
 Route::get('/', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 Route::get('/search', [App\Http\Controllers\HomeController::class, 'search'])->name('search');
@@ -193,6 +205,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/video-templates/{videoTemplate}/use', [App\Http\Controllers\Admin\VideoTemplateController::class, 'use'])->name('video-templates.use');
         Route::post('/video-templates/{videoTemplate}/duplicate', [App\Http\Controllers\Admin\VideoTemplateController::class, 'duplicate'])->name('video-templates.duplicate');
 
+        // Video Preview routes
+        Route::post('/video-preview/upload', [App\Http\Controllers\Admin\VideoPreviewController::class, 'uploadFiles'])->name('video-preview.upload');
+        Route::post('/video-preview/generate', [App\Http\Controllers\Admin\VideoPreviewController::class, 'generatePreview'])->name('video-preview.generate');
+        Route::delete('/video-preview/delete', [App\Http\Controllers\Admin\VideoPreviewController::class, 'deletePreview'])->name('video-preview.delete');
+
         // Log Viewer routes
         Route::get('/logs', [App\Http\Controllers\Admin\LogViewerController::class, 'index'])->name('logs.index');
         Route::get('/logs/download', [App\Http\Controllers\Admin\LogViewerController::class, 'download'])->name('logs.download');
@@ -320,6 +337,46 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/video-queue/worker-status', [App\Http\Controllers\Admin\VideoQueueController::class, 'getWorkerStatus'])->name('video-queue.worker-status');
         Route::post('/video-queue/{taskId}/cancel', [App\Http\Controllers\Admin\VideoQueueController::class, 'cancel'])->name('video-queue.cancel');
         Route::post('/video-queue/{taskId}/retry', [App\Http\Controllers\Admin\VideoQueueController::class, 'retry'])->name('video-queue.retry');
+
+        // Temporary route to create GeneratedVideo record
+        Route::get('/create-generated-video/{filename}', function($filename) {
+            try {
+                $fullPath = storage_path('app/videos/' . $filename);
+
+                if (!File::exists($fullPath)) {
+                    return response()->json(['error' => 'Video file not found: ' . $fullPath], 404);
+                }
+
+                $video = new \App\Models\GeneratedVideo();
+                $video->title = 'Video tiếng Việt - Test subtitle UTF-8';
+                $video->description = 'Video được tạo từ template với subtitle tiếng Việt UTF-8 encoding';
+                $video->platform = 'tiktok';
+                $video->media_type = 'images';
+                $video->file_path = 'videos/' . $filename;
+                $video->file_name = $filename;
+                $video->file_size = File::size($fullPath);
+                $video->duration = 30;
+                $video->metadata = [
+                    'generation_parameters' => ['platform' => 'tiktok', 'media_type' => 'images'],
+                    'subtitle_text' => 'Nếu bạn đã làm theo đúng quy trình tạo phụ đề từ tiếng Việt...',
+                    'created_via' => 'manual_fix'
+                ];
+                $video->status = 'generated';
+                $video->task_id = 112;
+                $video->save();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'GeneratedVideo created successfully',
+                    'video_id' => $video->id,
+                    'file_path' => $video->file_path,
+                    'file_size' => number_format($video->file_size / 1024 / 1024, 2) . ' MB'
+                ]);
+
+            } catch (\Exception $e) {
+                return response()->json(['error' => $e->getMessage()], 500);
+            }
+        })->name('create-generated-video');
         Route::delete('/video-queue/{taskId}', [App\Http\Controllers\Admin\VideoQueueController::class, 'delete'])->name('video-queue.delete');
         Route::post('/video-queue/clear-completed', [App\Http\Controllers\Admin\VideoQueueController::class, 'clearCompleted'])->name('video-queue.clear-completed');
 

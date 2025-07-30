@@ -143,7 +143,9 @@ class VideoManagementController extends Controller
             abort(404, 'File video không tồn tại');
         }
 
-        return Response::download($video->file_path, $video->file_name);
+        // Get full path for download
+        $fullPath = $this->getVideoFullPath($video);
+        return Response::download($fullPath, $video->file_name);
     }
 
     /**
@@ -155,8 +157,10 @@ class VideoManagementController extends Controller
             abort(404, 'File video không tồn tại');
         }
 
-        $file = File::get($video->file_path);
-        $type = File::mimeType($video->file_path);
+        // Get full path for preview
+        $fullPath = $this->getVideoFullPath($video);
+        $file = File::get($fullPath);
+        $type = File::mimeType($fullPath);
 
         return Response::make($file, 200, [
             'Content-Type' => $type,
@@ -171,7 +175,8 @@ class VideoManagementController extends Controller
     {
         // Delete file if exists
         if ($video->fileExists()) {
-            File::delete($video->file_path);
+            $fullPath = $this->getVideoFullPath($video);
+            File::delete($fullPath);
         }
 
         // Delete thumbnail if exists
@@ -204,7 +209,8 @@ class VideoManagementController extends Controller
             case 'delete':
                 foreach ($videos as $video) {
                     if ($video->fileExists()) {
-                        File::delete($video->file_path);
+                        $fullPath = $this->getVideoFullPath($video);
+                        File::delete($fullPath);
                     }
                     if ($video->thumbnail_path && File::exists($video->thumbnail_path)) {
                         File::delete($video->thumbnail_path);
@@ -265,5 +271,25 @@ class VideoManagementController extends Controller
         }
 
         return redirect()->route('admin.videos.index')->with('success', $message);
+    }
+
+    /**
+     * Get full path for video file
+     */
+    private function getVideoFullPath(GeneratedVideo $video)
+    {
+        // Try absolute path first
+        if (File::exists($video->file_path)) {
+            return $video->file_path;
+        }
+
+        // Try storage path
+        $storagePath = storage_path('app/' . $video->file_path);
+        if (File::exists($storagePath)) {
+            return $storagePath;
+        }
+
+        // Fallback to original path
+        return $video->file_path;
     }
 }

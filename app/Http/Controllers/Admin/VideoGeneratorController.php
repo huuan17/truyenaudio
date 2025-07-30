@@ -1057,9 +1057,32 @@ class VideoGeneratorController extends Controller
      */
     public function generateFromTemplate(Request $request)
     {
+        // Log immediately to catch all calls
+        file_put_contents(storage_path('logs/template-debug.log'),
+            "[" . date('Y-m-d H:i:s') . "] generateFromTemplate called\n" .
+            "Method: " . $request->method() . "\n" .
+            "URL: " . $request->fullUrl() . "\n" .
+            "Template ID: " . $request->input('template_id') . "\n" .
+            "Has files: " . ($request->hasFile('inputs') ? 'yes' : 'no') . "\n" .
+            "All inputs: " . json_encode($request->input('inputs', [])) . "\n\n",
+            FILE_APPEND
+        );
+
         $logger = new \App\Services\CustomLoggerService();
+        $logger->logInfo('video-template', '=== GENERATE FROM TEMPLATE METHOD CALLED ===', [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'template_id' => $request->input('template_id'),
+            'has_files' => $request->hasFile('inputs'),
+            'all_inputs' => $request->input('inputs', [])
+        ]);
 
         try {
+            file_put_contents(storage_path('logs/template-debug.log'),
+                "[" . date('Y-m-d H:i:s') . "] Starting template processing\n",
+                FILE_APPEND
+            );
+
             $logger->logInfo('video-template', 'Starting template video generation', [
                 'template_id' => $request->template_id,
                 'user_id' => auth()->id(),
@@ -1074,17 +1097,38 @@ class VideoGeneratorController extends Controller
             ]);
 
             // Validate template inputs
+            file_put_contents(storage_path('logs/template-debug.log'),
+                "[" . date('Y-m-d H:i:s') . "] Before validation\n",
+                FILE_APPEND
+            );
+
             $this->validateTemplateInputs($request, $template);
+
+            file_put_contents(storage_path('logs/template-debug.log'),
+                "[" . date('Y-m-d H:i:s') . "] After validation\n",
+                FILE_APPEND
+            );
 
             $logger->logInfo('video-template', 'Template inputs validated successfully');
 
             // Merge template settings with user inputs
             $mergedRequest = $this->mergeTemplateData($request, $template);
 
+            file_put_contents(storage_path('logs/template-debug.log'),
+                "[" . date('Y-m-d H:i:s') . "] After mergeTemplateData\n" .
+                "Merged duration_based_on: " . ($mergedRequest->input('duration_based_on') ?? 'NULL') . "\n" .
+                "Merged custom_duration: " . ($mergedRequest->input('custom_duration') ?? 'NULL') . "\n" .
+                "Merged image_duration: " . ($mergedRequest->input('image_duration') ?? 'NULL') . "\n" .
+                "Merged slide_duration: " . ($mergedRequest->input('slide_duration') ?? 'NULL') . "\n",
+                FILE_APPEND
+            );
+
             $logger->logInfo('video-template', 'Template data merged successfully', [
                 'merged_platform' => $mergedRequest->input('platform'),
                 'merged_settings_count' => count($mergedRequest->all()),
                 'subtitle_size' => $mergedRequest->input('subtitle_size'),
+                'duration_based_on' => $mergedRequest->input('duration_based_on'),
+                'custom_duration' => $mergedRequest->input('custom_duration'),
                 'subtitle_color' => $mergedRequest->input('subtitle_color'),
                 'subtitle_background' => $mergedRequest->input('subtitle_background'),
                 'logo_size' => $mergedRequest->input('logo_size')
@@ -1299,6 +1343,13 @@ class VideoGeneratorController extends Controller
      */
     private function mergeTemplateData(Request $request, VideoTemplate $template)
     {
+        file_put_contents(storage_path('logs/template-debug.log'),
+            "[" . date('Y-m-d H:i:s') . "] mergeTemplateData called\n" .
+            "Template ID: " . $template->id . "\n" .
+            "Template settings: " . json_encode($template->settings) . "\n",
+            FILE_APPEND
+        );
+
         $logger = new \App\Services\CustomLoggerService();
 
         try {
@@ -1311,18 +1362,30 @@ class VideoGeneratorController extends Controller
             // Start with template settings
             $data = $template->settings ?? [];
 
-            // Set default values FIRST to ensure audio_source is available during mapping
-            $data = array_merge([
+            // Set default values FIRST, but don't override template settings
+            $defaults = [
                 'tts_speed' => 1.0,
                 'tts_volume' => 18, // Default to 18dB as per requirements
                 'audio_volume' => 18, // Default to 18dB as per requirements
                 'logo_opacity' => 1.0,
                 'logo_margin' => 20,
-                'duration_based_on' => 'images',
+                'duration_based_on' => 'images', // Default only if not set in template
+                'custom_duration' => 30, // Default only if not set in template
                 'video_title' => $template->generateVideoName(), // Auto-generate name
                 'platform' => 'none',
                 'audio_source' => 'none', // Default to no audio to avoid TTS requirement
-            ], $data);
+            ];
+
+            // Merge defaults first, then template settings (template settings take priority)
+            $data = array_merge($defaults, $data);
+
+            $logger->logInfo('video-template', 'Template settings after merge', [
+                'duration_based_on' => $data['duration_based_on'] ?? 'not_set',
+                'custom_duration' => $data['custom_duration'] ?? 'not_set',
+                'image_duration' => $data['image_duration'] ?? 'not_set',
+                'platform' => $data['platform'] ?? 'not_set',
+                'media_type' => $data['media_type'] ?? 'not_set'
+            ]);
 
             // Map template inputs to actual form fields
             $inputs = $request->input('inputs', []);
@@ -1331,7 +1394,13 @@ class VideoGeneratorController extends Controller
                 $logger->logDebug('video-template', "Mapping input: {$inputName}", [
                     'input_value_type' => gettype($inputValue),
                     'input_value_preview' => is_string($inputValue) ? substr($inputValue, 0, 100) : $inputValue,
-                    'current_audio_source' => $data['audio_source'] ?? 'not_set'
+                    'current_audio_source' => $data['audio_source'] ?? 'not_set',
+                    'has_file' => $request->hasFile("inputs.{$inputName}"),
+                    'file_info' => $request->hasFile("inputs.{$inputName}") ? [
+                        'original_name' => $request->file("inputs.{$inputName}")->getClientOriginalName(),
+                        'mime_type' => $request->file("inputs.{$inputName}")->getMimeType(),
+                        'size' => $request->file("inputs.{$inputName}")->getSize()
+                    ] : null
                 ]);
 
                 // Map common input names to form fields
@@ -1340,7 +1409,10 @@ class VideoGeneratorController extends Controller
                 $logger->logDebug('video-template', "After mapping {$inputName}", [
                     'audio_source' => $data['audio_source'] ?? 'not_set',
                     'has_tts_text' => !empty($data['tts_text']),
-                    'tts_text_preview' => !empty($data['tts_text']) ? substr($data['tts_text'], 0, 50) : 'none'
+                    'tts_text_preview' => !empty($data['tts_text']) ? substr($data['tts_text'], 0, 50) : 'none',
+                    'has_product_video' => !empty($data['product_video']),
+                    'has_images' => !empty($data['images']),
+                    'media_type' => $data['media_type'] ?? 'not_set'
                 ]);
             }
 
@@ -1433,6 +1505,15 @@ class VideoGeneratorController extends Controller
         // Create a new request with merged data
         $mergedRequest = new Request();
         $mergedRequest->merge($data);
+
+        // Debug: Log duration settings in merged request
+        $logger->logInfo('video-template', 'Merged request duration settings', [
+            'duration_based_on' => $mergedRequest->input('duration_based_on'),
+            'custom_duration' => $mergedRequest->input('custom_duration'),
+            'image_duration' => $mergedRequest->input('image_duration'),
+            'sync_with_audio' => $mergedRequest->input('sync_with_audio'),
+            'all_data_keys' => array_keys($data)
+        ]);
 
         // Copy files from original request - handle nested inputs structure
         if ($request->hasFile('inputs')) {
@@ -1550,6 +1631,13 @@ class VideoGeneratorController extends Controller
             }
         }
 
+        file_put_contents(storage_path('logs/template-debug.log'),
+            "[" . date('Y-m-d H:i:s') . "] mergeTemplateData completed successfully\n" .
+            "Merged duration_based_on: " . ($mergedRequest->input('duration_based_on') ?? 'NULL') . "\n" .
+            "Merged custom_duration: " . ($mergedRequest->input('custom_duration') ?? 'NULL') . "\n",
+            FILE_APPEND
+        );
+
         return $mergedRequest;
     }
 
@@ -1573,6 +1661,7 @@ class VideoGeneratorController extends Controller
             'product_images' => 'images',
             'product_media' => 'images',
             'titktok_1_anh' => 'images', // Template specific mapping
+            'titktok_1_sub' => 'subtitle_text', // Template specific subtitle mapping
             'background_video' => 'background_video',
             'lesson_videos' => 'background_video',
             'product_videos' => 'background_video',
@@ -1670,11 +1759,18 @@ class VideoGeneratorController extends Controller
                     // Multiple files - map to images
                     $data['images'] = $file;
                 } else {
-                    // Single file - check if it's an image
+                    // Single file - check if it's an image or video
                     $mimeType = $file->getMimeType();
                     if (str_starts_with($mimeType, 'image/')) {
                         // Single image - convert to array for consistency
                         $data['images'] = [$file];
+                    } elseif (str_starts_with($mimeType, 'video/')) {
+                        // Video file - map to appropriate video field based on input name
+                        if (str_contains($inputName, 'video') || str_contains($inputName, 'background')) {
+                            $data['product_video'] = $file;
+                        } else {
+                            $data[$inputName] = $file;
+                        }
                     } else {
                         // Other file types
                         $data[$inputName] = $file;

@@ -1335,8 +1335,15 @@ $(document).ready(function() {
         }
     });
 
-    // Refresh CSRF token every 10 minutes
-    setInterval(function() {
+    // Check if user just logged in and refresh CSRF token
+    @if(session('success') && str_contains(session('success'), 'Đăng nhập thành công'))
+    setTimeout(function() {
+        refreshCsrfToken();
+    }, 1000);
+    @endif
+
+    // Function to refresh CSRF token
+    function refreshCsrfToken() {
         $.get('/csrf-token', function(data) {
             if (data.token) {
                 $('meta[name="csrf-token"]').attr('content', data.token);
@@ -1347,11 +1354,15 @@ $(document).ready(function() {
                         'X-CSRF-TOKEN': data.token
                     }
                 });
+                console.log('CSRF token refreshed successfully');
             }
         }).fail(function() {
             console.log('CSRF token refresh failed');
         });
-    }, 10 * 60 * 1000); // 10 minutes
+    }
+
+    // Refresh CSRF token every 10 minutes
+    setInterval(refreshCsrfToken, 10 * 60 * 1000); // 10 minutes
 
     // Handle 419 errors globally
     $(document).ajaxError(function(event, xhr, settings) {
@@ -1368,12 +1379,27 @@ $(document).ready(function() {
         var form = $(this);
         var tokenInput = form.find('input[name="_token"]');
 
+        // Skip CSRF refresh for login form to avoid issues
+        if (form.attr('id') === 'loginForm') {
+            return true;
+        }
+
         if (tokenInput.length > 0) {
+            e.preventDefault(); // Prevent form submission
+
             // Get fresh token before submit
             $.get('/csrf-token', function(data) {
                 if (data.token) {
                     tokenInput.val(data.token);
+                    // Update meta tag as well
+                    $('meta[name="csrf-token"]').attr('content', data.token);
+                    // Now submit the form
+                    form.off('submit').submit();
                 }
+            }).fail(function() {
+                // If CSRF refresh fails, try to submit anyway
+                console.log('CSRF token refresh failed, submitting with current token');
+                form.off('submit').submit();
             });
         }
     });
