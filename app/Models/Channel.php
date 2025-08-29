@@ -122,10 +122,11 @@ class Channel extends Model
         }
 
         if ($this->platform === 'youtube') {
-            return isset($this->api_credentials['client_id']) &&
-                   isset($this->api_credentials['client_secret']) &&
-                   !empty($this->api_credentials['client_id']) &&
-                   !empty($this->api_credentials['client_secret']);
+            $creds = $this->api_credentials ?: [];
+            $refresh = $creds['refresh_token'] ?? null;
+            $clientId = $creds['client_id'] ?? config('services.youtube.client_id');
+            $clientSecret = $creds['client_secret'] ?? config('services.youtube.client_secret');
+            return !empty($refresh) && !empty($clientId) && !empty($clientSecret);
         }
 
         return !empty($this->api_credentials);

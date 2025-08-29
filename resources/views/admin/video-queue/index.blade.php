@@ -378,10 +378,33 @@ function refreshQueueStatus() {
         // Show last updated time
         updateLastRefreshTime();
 
-    }).fail(function() {
+    }).fail(function(xhr, status, error) {
         // Restore refresh button on error
         refreshButton.find('i').attr('class', originalIcon);
-        showNotification('Không thể cập nhật trạng thái queue', 'warning', 3000);
+
+        // More detailed error message
+        let errorMessage = 'Không thể cập nhật trạng thái queue';
+        if (xhr.status === 401) {
+            errorMessage = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.';
+        } else if (xhr.status === 403) {
+            errorMessage = 'Không có quyền truy cập.';
+        } else if (xhr.status === 404) {
+            errorMessage = 'Không tìm thấy trang hoặc tài nguyên yêu cầu.';
+        } else if (xhr.status === 500) {
+            errorMessage = 'Lỗi server. Vui lòng thử lại sau.';
+        } else if (xhr.status === 0) {
+            errorMessage = 'Lỗi kết nối mạng. Vui lòng kiểm tra internet.';
+        }
+
+        showNotification(errorMessage, 'warning', 5000);
+
+        // Log for debugging
+        console.error('Queue status update failed:', {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            responseText: xhr.responseText,
+            error: error
+        });
     });
 }
 
@@ -588,7 +611,7 @@ function updateTaskActionButtonsFromStatus(row, task) {
 }
 
 function showTaskDetails(taskId) {
-    $.get(`{{ route("admin.video-queue.index") }}/${taskId}`, function(data) {
+    $.get(`/admin/video-queue/${taskId}`, function(data) {
         let content = `
             <div class="row">
                 <div class="col-md-6">

@@ -34,6 +34,7 @@ return [
     'vbee' => [
         'app_id' => env('VBEE_APP_ID'),
         'access_token' => env('VBEE_ACCESS_TOKEN'),
+        'base_url' => env('VBEE_BASE_URL', 'https://vbee.vn/api/v1'),
     ],
 
     'tiktok' => [
@@ -42,6 +43,13 @@ return [
         'redirect_uri' => env('TIKTOK_REDIRECT_URI'),
         'sandbox' => env('TIKTOK_SANDBOX', true),
         'api_version' => env('TIKTOK_API_VERSION', 'v2'),
+    ],
+
+    'youtube' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        // Redirect URI is derived from route in code; expose here for completeness if needed
+        'redirect_uri' => env('GOOGLE_REDIRECT_URI'),
     ],
 
 ];

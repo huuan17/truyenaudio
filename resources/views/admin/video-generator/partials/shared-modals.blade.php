@@ -207,7 +207,14 @@ function applySettings() {
         if (window.statusRefreshInterval) {
             clearInterval(window.statusRefreshInterval);
         }
-        window.statusRefreshInterval = setInterval(refreshVideoStatus, 30000);
+        window.statusRefreshInterval = setInterval(function() {
+            // Refresh video status if function exists
+            if (typeof refreshVideoStatus === 'function') {
+                refreshVideoStatus();
+            } else {
+                console.log('⚠️ refreshVideoStatus function not available');
+            }
+        }, 30000);
     } else {
         // Stop auto refresh if disabled
         if (window.statusRefreshInterval) {
@@ -217,8 +224,23 @@ function applySettings() {
     
     // Switch to default platform
     const defaultPlatform = localStorage.getItem('default_platform') || 'tiktok';
+
+    // Get current platform safely
+    let currentPlatform = 'tiktok'; // default
+    try {
+        const activeTab = document.querySelector('.nav-link.active[data-platform]');
+        if (activeTab) {
+            currentPlatform = activeTab.getAttribute('data-platform');
+        }
+    } catch (e) {
+        console.log('⚠️ Could not determine current platform, using default');
+    }
+
     if (defaultPlatform !== currentPlatform) {
-        $(`#${defaultPlatform}-tab`).tab('show');
+        const targetTab = document.querySelector(`#${defaultPlatform}-tab`);
+        if (targetTab && typeof $ !== 'undefined') {
+            $(`#${defaultPlatform}-tab`).tab('show');
+        }
     }
 }
 

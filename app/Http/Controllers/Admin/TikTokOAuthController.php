@@ -249,6 +249,135 @@ class TikTokOAuthController extends Controller
     }
 
     /**
+     * Start OAuth flow for new channel creation
+     */
+    public function startOAuthForNewChannel(Request $request)
+    {
+        try {
+            $request->validate([
+                'client_key' => 'required|string',
+                'client_secret' => 'required|string'
+            ]);
+
+            // Store client credentials in session for OAuth flow
+            $state = Str::random(32);
+            session([
+                'tiktok_oauth_state' => $state,
+                'tiktok_new_channel_client_key' => $request->client_key,
+                'tiktok_new_channel_client_secret' => $request->client_secret,
+                'tiktok_oauth_for_new_channel' => true
+            ]);
+
+            // Create temporary TikTok service with provided credentials
+            $tempService = new \App\Services\TikTokService(
+                $request->client_key,
+                $request->client_secret,
+                route('admin.channels.tiktok.oauth.callback') // Use new callback route
+            );
+
+            $authUrl = $tempService->getAuthorizationUrl($state);
+
+            return response()->json([
+                'success' => true,
+                'auth_url' => $authUrl
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('TikTok OAuth Start for New Channel Failed', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Handle OAuth callback for new channel creation
+     */
+    public function callbackForNewChannel(Request $request)
+    {
+        try {
+            // Verify state parameter
+            $state = $request->get('state');
+            $sessionState = session('tiktok_oauth_state');
+            $isForNewChannel = session('tiktok_oauth_for_new_channel');
+
+            if (!$state || !$sessionState || $state !== $sessionState || !$isForNewChannel) {
+                return redirect()->route('admin.channels.create')
+                    ->with('error', 'OAuth state không hợp lệ');
+            }
+
+            // Get stored credentials
+            $clientKey = session('tiktok_new_channel_client_key');
+            $clientSecret = session('tiktok_new_channel_client_secret');
+
+            if (!$clientKey || !$clientSecret) {
+                return redirect()->route('admin.channels.create')
+                    ->with('error', 'Thiếu thông tin client credentials');
+            }
+
+            // Check for authorization code
+            $code = $request->get('code');
+            if (!$code) {
+                $error = $request->get('error');
+                $errorDescription = $request->get('error_description');
+
+                Log::warning('TikTok OAuth Error for New Channel', [
+                    'error' => $error,
+                    'description' => $errorDescription
+                ]);
+
+                return redirect()->route('admin.channels.create')
+                    ->with('error', 'Người dùng từ chối ủy quyền hoặc có lỗi xảy ra: ' . ($errorDescription ?: $error));
+            }
+
+            // Create temporary TikTok service
+            $tempService = new \App\Services\TikTokService(
+                $clientKey,
+                $clientSecret,
+                route('admin.channels.tiktok.oauth.callback')
+            );
+
+            // Exchange code for access token
+            $tokenResult = $tempService->getAccessToken($code);
+
+            if (!$tokenResult['success']) {
+                Log::error('TikTok Token Exchange Failed for New Channel', $tokenResult);
+
+                return redirect()->route('admin.channels.create')
+                    ->with('error', 'Không thể lấy access token: ' . $tokenResult['error']);
+            }
+
+            // Clear session data
+            session()->forget([
+                'tiktok_oauth_state',
+                'tiktok_new_channel_client_key',
+                'tiktok_new_channel_client_secret',
+                'tiktok_oauth_for_new_channel'
+            ]);
+
+            // Redirect back to create form with tokens
+            return redirect()->route('admin.channels.create', [
+                'oauth_success' => 1,
+                'access_token' => $tokenResult['access_token'],
+                'refresh_token' => $tokenResult['refresh_token']
+            ])->with('success', 'Đã lấy được Access Token và Refresh Token từ TikTok thành công!');
+
+        } catch (\Exception $e) {
+            Log::error('TikTok OAuth Callback Exception for New Channel', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->route('admin.channels.create')
+                ->with('error', 'Có lỗi xảy ra trong quá trình OAuth: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Internal refresh token method
      */
     private function refreshTokenInternal(Channel $channel)
@@ -324,6 +453,67 @@ class TikTokOAuthController extends Controller
 
             return redirect()->back()
                 ->with('error', 'Có lỗi xảy ra: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Get TikTok Channel ID from user info
+     */
+    public function getChannelId(Request $request)
+    {
+        try {
+            $request->validate([
+                'access_token' => 'required|string',
+                'client_key' => 'required|string',
+                'client_secret' => 'required|string'
+            ]);
+
+            // Create temporary TikTok service
+            $tempService = new \App\Services\TikTokService(
+                $request->client_key,
+                $request->client_secret
+            );
+
+            // Get user info
+            $userResult = $tempService->getUserInfo($request->access_token);
+
+            if (!$userResult['success']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Không thể lấy thông tin user: ' . $userResult['error']
+                ]);
+            }
+
+            $user = $userResult['user'];
+
+            // Extract channel info
+            $channelId = $user['open_id'] ?? null;
+            $username = $user['username'] ?? $user['display_name'] ?? null;
+
+            if (!$channelId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Không tìm thấy Channel ID trong thông tin user'
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'channel_id' => $channelId,
+                'username' => $username,
+                'user_info' => $user
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('TikTok Get Channel ID Failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 }

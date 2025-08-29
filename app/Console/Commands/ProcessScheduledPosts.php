@@ -70,10 +70,14 @@ class ProcessScheduledPosts extends Command
                     continue;
                 }
 
-                // Kiểm tra file video có tồn tại không
-                if (!file_exists($post->video_path)) {
+                // Kiểm tra file video có tồn tại không (hỗ trợ đường dẫn tương đối trong storage/app)
+                $videoPathCheck = $post->video_path;
+                if (!preg_match('/^[A-Za-z]:\\\\|^\\\\\\\\|^\//', $videoPathCheck)) {
+                    $videoPathCheck = storage_path('app/' . ltrim($videoPathCheck, '/\\'));
+                }
+                if (!file_exists($videoPathCheck)) {
                     $post->markAsFailed("File video không tồn tại: {$post->video_path}");
-                    $this->error("  ❌ File video không tồn tại");
+                    $this->error("  ❌ File video không tồn tại: {$post->video_path}");
                     $failed++;
                     continue;
                 }
@@ -243,12 +247,8 @@ class ProcessScheduledPosts extends Command
      */
     private function uploadToYouTube(ScheduledPost $post, Channel $channel)
     {
-        // TODO: Implement YouTube API upload
-        // Hiện tại chỉ simulate upload
-
         $this->line("    📺 Uploading to YouTube...");
 
-        // Kiểm tra credentials
         if (!$channel->hasValidCredentials()) {
             return [
                 'success' => false,
@@ -256,15 +256,37 @@ class ProcessScheduledPosts extends Command
             ];
         }
 
-        // Simulate upload process
-        sleep(3); // Simulate API call
+        // Strictly use DB creds for YouTube to ensure refresh_token matches client
+        $creds = $channel->api_credentials ?: [];
+        $clientId = $creds['client_id'] ?? null;
+        $clientSecret = $creds['client_secret'] ?? null;
+        $refreshToken = $creds['refresh_token'] ?? null;
+        if (!$clientId || !$clientSecret || !$refreshToken) {
+            return ['success' => false, 'error' => 'Thiếu client_id/client_secret/refresh_token trong DB cho YouTube'];
+        }
 
-        // Mock successful upload
-        return [
-            'success' => true,
-            'post_id' => 'youtube_' . time() . '_' . $post->id,
-            'url' => 'https://youtube.com/watch?v=' . strtoupper(substr(md5($post->id . time()), 0, 11))
-        ];
+        $videoPath = $post->video_path;
+        if (!str_starts_with($videoPath, DIRECTORY_SEPARATOR) && !preg_match('/^[A-Za-z]:\\\\|\//', $videoPath)) {
+            $videoPath = storage_path('app/' . ltrim($videoPath, '/\\'));
+        }
+        if (!file_exists($videoPath)) {
+            return ['success' => false, 'error' => 'Không tìm thấy video: ' . $post->video_path];
+        }
+
+        $title = $post->title ?: 'Video từ ' . config('app.name');
+        $description = $post->description ?: '';
+        $tags = $post->tags ?? [];
+        $privacy = $post->privacy ?: 'private';
+        $categoryId = null;
+
+        if (!class_exists(\App\Services\YouTubeUploader::class)) {
+            return ['success' => false, 'error' => 'Thiếu YouTubeUploader service'];
+        }
+
+        $uploader = new \App\Services\YouTubeUploader($clientId, $clientSecret, $refreshToken);
+        $result = $uploader->upload($videoPath, $title, $description, $tags, $privacy, $categoryId);
+
+        return $result;
     }
 
     /**

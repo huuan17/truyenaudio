@@ -51,6 +51,14 @@ class GeneratedVideo extends Model
     }
 
     /**
+     * Get the publishing records for this video
+     */
+    public function publishings()
+    {
+        return $this->hasMany(VideoPublishing::class);
+    }
+
+    /**
      * Get the channel this video belongs to
      */
     public function channel()

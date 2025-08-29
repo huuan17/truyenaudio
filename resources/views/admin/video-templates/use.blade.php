@@ -2,6 +2,45 @@
 
 @section('content')
 <div class="container-fluid">
+    <!-- Batch Results Display -->
+    @if(session('batch_results') || session('batch_errors'))
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar mr-2"></i>Kết quả Batch Processing
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if(session('batch_results'))
+                        @php $results = session('batch_results'); @endphp
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-check-circle mr-2"></i>Video đã tạo thành công ({{ count($results) }})</h6>
+                            <ul class="mb-0">
+                                @foreach($results as $result)
+                                    <li>{{ $result['video_name'] }} - {{ $result['message'] }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if(session('batch_errors'))
+                        @php $batchErrors = session('batch_errors'); @endphp
+                        <div class="alert alert-danger">
+                            <h6><i class="fas fa-exclamation-triangle mr-2"></i>Video gặp lỗi ({{ count($batchErrors) }})</h6>
+                            <ul class="mb-0">
+                                @foreach($batchErrors as $error)
+                                    <li><strong>{{ $error['video_name'] }}:</strong> {{ $error['error'] }}</li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
     <!-- Breadcrumb -->
     <x-admin-breadcrumb :items="[
         ['title' => 'Quản lý Template Video', 'url' => route('admin.video-templates.index')],
@@ -15,71 +54,87 @@
                     <h5 class="mb-0">
                         <i class="fas fa-play mr-2"></i>Sử dụng Template: {{ $videoTemplate->name }}
                     </h5>
+
+                    <!-- Mode Selection -->
+                    <div class="mt-3">
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-outline-light btn-sm active">
+                                <input type="radio" name="template_mode" id="single_mode" value="single" checked>
+                                <i class="fas fa-video mr-1"></i>Tạo 1 video
+                            </label>
+                            <label class="btn btn-outline-light btn-sm">
+                                <input type="radio" name="template_mode" id="batch_mode" value="batch">
+                                <i class="fas fa-layer-group mr-1"></i>Tạo nhiều video (Batch)
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ route('admin.video-generator.generate-from-template') }}" 
-                          enctype="multipart/form-data" id="templateUseForm">
+                    <!-- Single Video Form -->
+                    <div id="single-form-container">
+                        <form method="POST" action="{{ route('admin.video-generator.generate-from-template') }}"
+                              enctype="multipart/form-data" id="templateUseForm">
                         @csrf
                         <input type="hidden" name="template_id" value="{{ $videoTemplate->id }}">
-                        
+
                         <!-- Required Inputs -->
                         @if($videoTemplate->required_inputs && count($videoTemplate->required_inputs) > 0)
                         <div class="form-section mb-4">
                             <h6 class="section-title text-danger">
                                 <i class="fas fa-asterisk mr-2"></i>Thông tin bắt buộc
                             </h6>
-                            
+
                             @foreach($videoTemplate->required_inputs as $input)
                             <div class="form-group">
                                 <label for="input_{{ $input['name'] }}">
                                     {{ $input['label'] }} <span class="text-danger">*</span>
                                 </label>
-                                
+
                                 @if($input['type'] === 'text')
                                     <input type="text" name="inputs[{{ $input['name'] }}]"
                                            id="input_{{ $input['name'] }}" class="form-control"
                                            value="{{ old('inputs.'.$input['name']) }}"
                                            placeholder="{{ $input['placeholder'] ?? '' }}" required>
-                                           
+
                                 @elseif($input['type'] === 'textarea')
                                     <textarea name="inputs[{{ $input['name'] }}]"
                                               id="input_{{ $input['name'] }}" class="form-control"
                                               rows="4" placeholder="{{ $input['placeholder'] ?? '' }}" required>{{ old('inputs.'.$input['name']) }}</textarea>
-                                              
+
                                 @elseif($input['type'] === 'audio')
-                                    <input type="file" name="inputs[{{ $input['name'] }}]" 
-                                           id="input_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}]"
+                                           id="input_{{ $input['name'] }}" class="form-control-file"
                                            accept="audio/*" required>
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn file âm thanh (MP3, WAV, M4A)' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'image')
-                                    <input type="file" name="inputs[{{ $input['name'] }}]" 
-                                           id="input_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}]"
+                                           id="input_{{ $input['name'] }}" class="form-control-file"
                                            accept="image/*" required>
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn hình ảnh (JPG, PNG, GIF)' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'images')
-                                    <input type="file" name="inputs[{{ $input['name'] }}][]" 
-                                           id="input_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}][]"
+                                           id="input_{{ $input['name'] }}" class="form-control-file"
                                            accept="image/*" multiple required>
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn nhiều hình ảnh' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'video')
-                                    <input type="file" name="inputs[{{ $input['name'] }}]" 
-                                           id="input_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}]"
+                                           id="input_{{ $input['name'] }}" class="form-control-file"
                                            accept="video/*" required>
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn file video (MP4, AVI, MOV)' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'url')
-                                    <input type="url" name="inputs[{{ $input['name'] }}]" 
-                                           id="input_{{ $input['name'] }}" class="form-control" 
+                                    <input type="url" name="inputs[{{ $input['name'] }}]"
+                                           id="input_{{ $input['name'] }}" class="form-control"
                                            placeholder="{{ $input['placeholder'] ?? 'https://...' }}" required>
-                                           
+
                                 @elseif($input['type'] === 'number')
-                                    <input type="number" name="inputs[{{ $input['name'] }}]" 
-                                           id="input_{{ $input['name'] }}" class="form-control" 
+                                    <input type="number" name="inputs[{{ $input['name'] }}]"
+                                           id="input_{{ $input['name'] }}" class="form-control"
                                            placeholder="{{ $input['placeholder'] ?? '' }}" required>
-                                           
+
                                 @elseif($input['type'] === 'select')
                                     <select name="inputs[{{ $input['name'] }}]"
                                             id="input_{{ $input['name'] }}" class="form-control" required>
@@ -96,10 +151,10 @@
                                            id="input_{{ $input['name'] }}" class="form-control-file"
                                            accept="*/*" required>
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn file' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'checkbox')
                                     <div class="form-check">
-                                        <input type="checkbox" name="inputs[{{ $input['name'] }}]" 
+                                        <input type="checkbox" name="inputs[{{ $input['name'] }}]"
                                                id="input_{{ $input['name'] }}" class="form-check-input" value="1">
                                         <label class="form-check-label" for="input_{{ $input['name'] }}">
                                             {{ $input['placeholder'] ?? $input['label'] }}
@@ -117,17 +172,17 @@
                             <h6 class="section-title text-info">
                                 <i class="fas fa-plus-circle mr-2"></i>Thông tin tùy chọn
                             </h6>
-                            
+
                             @foreach($videoTemplate->optional_inputs as $input)
                             <div class="form-group">
                                 <label for="optional_{{ $input['name'] }}">{{ $input['label'] }}</label>
-                                
+
                                 @if($input['type'] === 'text')
                                     <input type="text" name="inputs[{{ $input['name'] }}]"
                                            id="optional_{{ $input['name'] }}" class="form-control"
                                            value="{{ old('inputs.'.$input['name']) }}"
                                            placeholder="{{ $input['placeholder'] ?? '' }}">
-                                           
+
                                 @elseif($input['type'] === 'textarea')
                                     <textarea name="inputs[{{ $input['name'] }}]"
                                               id="optional_{{ $input['name'] }}" class="form-control"
@@ -152,25 +207,25 @@
                                         </small>
                                     </div>
                                     @endif
-                                              
+
                                 @elseif($input['type'] === 'audio')
-                                    <input type="file" name="inputs[{{ $input['name'] }}]" 
-                                           id="optional_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}]"
+                                           id="optional_{{ $input['name'] }}" class="form-control-file"
                                            accept="audio/*">
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn file âm thanh (tùy chọn)' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'image')
-                                    <input type="file" name="inputs[{{ $input['name'] }}]" 
-                                           id="optional_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}]"
+                                           id="optional_{{ $input['name'] }}" class="form-control-file"
                                            accept="image/*">
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn hình ảnh (tùy chọn)' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'images')
-                                    <input type="file" name="inputs[{{ $input['name'] }}][]" 
-                                           id="optional_{{ $input['name'] }}" class="form-control-file" 
+                                    <input type="file" name="inputs[{{ $input['name'] }}][]"
+                                           id="optional_{{ $input['name'] }}" class="form-control-file"
                                            accept="image/*" multiple>
                                     <small class="form-text text-muted">{{ $input['placeholder'] ?? 'Chọn nhiều hình ảnh (tùy chọn)' }}</small>
-                                    
+
                                 @elseif($input['type'] === 'video')
                                     <input type="file" name="inputs[{{ $input['name'] }}]"
                                            id="optional_{{ $input['name'] }}" class="form-control-file"
@@ -453,7 +508,104 @@
                                 </small>
                             </div>
                         </div>
-                    </form>
+                        </form>
+                    </div>
+
+                    <!-- Batch Video Form -->
+                    <div id="batch-form-container" style="display: none;">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle mr-2"></i>
+                            <strong>Chế độ Batch:</strong> Tạo nhiều video cùng lúc với các nội dung khác nhau nhưng cùng template.
+                        </div>
+
+                        <form method="POST" action="{{ route('admin.video-generator.generate-batch-from-template') }}"
+                              enctype="multipart/form-data" id="templateBatchForm">
+                            @csrf
+                            <input type="hidden" name="template_id" value="{{ $videoTemplate->id }}">
+
+                            <!-- Batch Settings -->
+                            <div class="form-section mb-4">
+                                <h6 class="section-title text-primary">
+                                    <i class="fas fa-cogs mr-2"></i>Cài đặt chung cho Batch
+                                </h6>
+
+                                <!-- Number of Videos -->
+                                <div class="form-group">
+                                    <label for="batch_count">
+                                        <i class="fas fa-hashtag mr-1"></i>Số lượng video muốn tạo
+                                    </label>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <input type="number" name="batch_count" id="batch_count"
+                                                   class="form-control" min="2" max="20" value="3"
+                                                   onchange="generateBatchInputs()">
+                                        </div>
+                                        <div class="col-md-8">
+                                            <small class="form-text text-muted">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Tối đa 20 video mỗi lần. Nhiều video sẽ mất thời gian xử lý lâu hơn.
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Common Audio -->
+                                <div class="form-group">
+                                    <label for="batch_background_audio">
+                                        <i class="fas fa-music mr-2"></i>Nhạc nền chung cho tất cả video
+                                        <span class="text-muted">(Tùy chọn)</span>
+                                    </label>
+                                    <select name="batch_background_audio_id" id="batch_background_audio" class="form-control">
+                                        <option value="">-- Sử dụng nhạc nền template (nếu có) --</option>
+                                        <optgroup label="Nhạc nền">
+                                            @foreach($audioLibrary->where('category', 'music') as $audio)
+                                                <option value="{{ $audio->id }}">
+                                                    {{ $audio->title }}
+                                                    @if($audio->duration > 0)
+                                                        ({{ gmdate('i:s', $audio->duration) }})
+                                                    @endif
+                                                </option>
+                                            @endforeach
+                                        </optgroup>
+                                    </select>
+                                </div>
+
+                                <!-- Common Channel -->
+                                <div class="form-group">
+                                    <label for="batch_channel">
+                                        <i class="fas fa-tv mr-2"></i>Kênh upload chung
+                                        <span class="text-muted">(Tùy chọn)</span>
+                                    </label>
+                                    <select name="batch_channel_id" id="batch_channel" class="form-control">
+                                        <option value="">-- Không upload tự động --</option>
+                                        @foreach($channels as $channel)
+                                            <option value="{{ $channel->id }}">
+                                                {{ $channel->platform }} - {{ $channel->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Dynamic Batch Inputs -->
+                            <div id="batch-inputs-container">
+                                <!-- Will be generated by JavaScript -->
+                            </div>
+
+                            <!-- Submit Button -->
+                            <div class="form-group text-center">
+                                <button type="submit" class="btn btn-success btn-lg px-4" id="batchSubmitBtn">
+                                    <i class="fas fa-layer-group mr-2"></i>Tạo <span id="batch-count-display">3</span> Video từ Template
+                                </button>
+                                <div class="mt-3">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock mr-1"></i>
+                                        Batch processing có thể mất nhiều thời gian. Các video sẽ được xử lý tuần tự.
+                                    </small>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -466,13 +618,13 @@
                 </div>
                 <div class="card-body">
                     @if($videoTemplate->thumbnail)
-                        <img src="{{ Storage::url($videoTemplate->thumbnail) }}" 
+                        <img src="{{ Storage::url($videoTemplate->thumbnail) }}"
                              class="img-fluid mb-3 rounded">
                     @endif
-                    
+
                     <h6>{{ $videoTemplate->name }}</h6>
                     <p class="text-muted">{{ $videoTemplate->description }}</p>
-                    
+
                     <div class="template-stats">
                         <div class="row text-center">
                             <div class="col-6">
@@ -489,9 +641,9 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr>
-                    
+
                     <div class="template-meta">
                         <small class="text-muted d-block">
                             <i class="fas fa-user mr-1"></i>
@@ -521,31 +673,31 @@
                         @php
                             $settings = $videoTemplate->settings;
                         @endphp
-                        
+
                         @if(isset($settings['platform']))
                         <div class="setting-item mb-2">
-                            <strong>Platform:</strong> 
+                            <strong>Platform:</strong>
                             <span class="badge badge-{{ $settings['platform'] === 'tiktok' ? 'info' : ($settings['platform'] === 'youtube' ? 'danger' : 'secondary') }}">
                                 {{ ucfirst($settings['platform']) }}
                             </span>
                         </div>
                         @endif
-                        
+
                         @if(isset($settings['media_type']))
                         <div class="setting-item mb-2">
                             <strong>Loại media:</strong> {{ $settings['media_type'] }}
                         </div>
                         @endif
-                        
+
                         @if(isset($settings['enable_subtitle']))
                         <div class="setting-item mb-2">
-                            <strong>Phụ đề:</strong> 
+                            <strong>Phụ đề:</strong>
                             <span class="badge badge-{{ $settings['enable_subtitle'] ? 'success' : 'secondary' }}">
                                 {{ $settings['enable_subtitle'] ? 'Có' : 'Không' }}
                             </span>
                         </div>
                         @endif
-                        
+
                         <small class="text-muted">
                             <i class="fas fa-info-circle mr-1"></i>
                             Các cài đặt này sẽ được áp dụng tự động
@@ -626,18 +778,83 @@
 .audio-details div {
     margin-bottom: 0.25rem;
 }
+
+/* Batch specific styles */
+#batch-form-container .card {
+    border: 1px solid #e3f2fd;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#batch-form-container .card-header {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid #dee2e6;
+}
+
+#batch-inputs-container .card {
+    transition: all 0.3s ease;
+}
+
+#batch-inputs-container .card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+.batch-video-card {
+    border-left: 4px solid #28a745;
+}
+
+.batch-count-badge {
+    background: #28a745;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 600;
+}
+
+.batch-results {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.batch-results ul {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.btn-group-toggle .btn {
+    border-radius: 0.375rem !important;
+}
+
+.btn-group-toggle .btn:first-child {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.btn-group-toggle .btn:last-child {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+}
+
+.btn-group-toggle .btn.active {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: white !important;
+}
 </style>
 @endpush
 
 @push('scripts')
 <script>
 // Audio Library Selection Handler
-document.getElementById('background_audio').addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    const audioInfo = document.getElementById('audioInfo');
-    const audioDetails = document.getElementById('audioDetails');
-    const audioPreview = document.getElementById('audioPreview');
-    const previewBtn = document.getElementById('previewAudioBtn');
+const bgSelect = document.getElementById('background_audio');
+if (bgSelect) {
+    bgSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const audioInfo = document.getElementById('audioInfo');
+        const audioDetails = document.getElementById('audioDetails');
+        const audioPreview = document.getElementById('audioPreview');
+        const previewBtn = document.getElementById('previewAudioBtn');
 
     if (this.value) {
         // Show audio info
@@ -677,9 +894,12 @@ document.getElementById('background_audio').addEventListener('change', function(
         audioPreview.src = '';
     }
 });
+}
+
 
 // Preview button handler
-document.getElementById('previewAudioBtn').addEventListener('click', function() {
+const previewBtnEl = document.getElementById('previewAudioBtn');
+if (previewBtnEl) previewBtnEl.addEventListener('click', function() {
     const audioPreview = document.getElementById('audioPreview');
 
     if (audioPreview.paused) {
@@ -692,7 +912,8 @@ document.getElementById('previewAudioBtn').addEventListener('click', function() 
 });
 
 // Reset preview button when audio ends
-document.getElementById('audioPreview').addEventListener('ended', function() {
+const audioPreviewEl = document.getElementById('audioPreview');
+if (audioPreviewEl) audioPreviewEl.addEventListener('ended', function() {
     const previewBtn = document.getElementById('previewAudioBtn');
     previewBtn.innerHTML = '<i class="fas fa-play mr-1"></i>Nghe thử';
 });
@@ -871,7 +1092,8 @@ function showPreviousFileSelection(input, fileNames) {
 }
 
 // Form validation
-document.getElementById('templateUseForm').addEventListener('submit', function(e) {
+const singleForm = document.getElementById('templateUseForm');
+if (singleForm) singleForm.addEventListener('submit', function(e) {
     const requiredInputs = document.querySelectorAll('input[required], textarea[required], select[required]');
     let hasError = false;
 
@@ -918,7 +1140,7 @@ document.querySelectorAll('input[type="file"]').forEach(function(input) {
             for (let i = 0; i < files.length; i++) {
                 fileNames.push(files[i].name);
             }
-            
+
             // Show selected files
             let preview = this.parentNode.querySelector('.file-preview');
             if (!preview) {
@@ -926,8 +1148,8 @@ document.querySelectorAll('input[type="file"]').forEach(function(input) {
                 preview.className = 'file-preview mt-2';
                 this.parentNode.appendChild(preview);
             }
-            
-            preview.innerHTML = '<small class="text-success"><i class="fas fa-check mr-1"></i>' + 
+
+            preview.innerHTML = '<small class="text-success"><i class="fas fa-check mr-1"></i>' +
                                fileNames.join(', ') + '</small>';
         }
     });
@@ -1023,7 +1245,160 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Template mode switching
+    const templateModeRadios = document.querySelectorAll('input[name="template_mode"]');
+    templateModeRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            const singleContainer = document.getElementById('single-form-container');
+            const batchContainer = document.getElementById('batch-form-container');
+            if (!singleContainer || !batchContainer) return;
+
+            if (this.value === 'single') {
+                singleContainer.style.display = 'block';
+                batchContainer.style.display = 'none';
+            } else {
+                singleContainer.style.display = 'none';
+                batchContainer.style.display = 'block';
+                console.log('[Batch] switched to batch mode');
+                generateBatchInputs(); // Generate initial batch inputs
+            }
+        });
+    });
+
+    // Auto switch to batch if query mode=batch
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('mode') === 'batch') {
+        const batchRadio = document.getElementById('batch_mode');
+        if (batchRadio) {
+            batchRadio.checked = true;
+            batchRadio.dispatchEvent(new Event('change'));
+        }
+    }
 });
+
+/**
+ * Generate batch input forms based on count
+ */
+function generateBatchInputs() {
+    const count = parseInt(document.getElementById('batch_count').value) || 3;
+    const container = document.getElementById('batch-inputs-container');
+    const template = @json($videoTemplate);
+
+    // Update display count
+    document.getElementById('batch-count-display').textContent = count;
+
+    let html = '<div class="form-section mb-4">';
+    html += '<h6 class="section-title text-success">';
+    html += '<i class="fas fa-list mr-2"></i>Nội dung cho từng video';
+    html += '</h6>';
+
+    for (let i = 1; i <= count; i++) {
+        html += `<div class="card mb-3">`;
+        html += `<div class="card-header bg-light">`;
+        html += `<h6 class="mb-0"><i class="fas fa-video mr-2"></i>Video ${i}</h6>`;
+        html += `</div>`;
+        html += `<div class="card-body">`;
+
+        // Video name
+        html += `<div class="form-group">`;
+        html += `<label for="batch_video_name_${i}">Tên video ${i} <span class="text-danger">*</span></label>`;
+        html += `<input type="text" name="batch_videos[${i-1}][video_name]" id="batch_video_name_${i}" class="form-control" required>`;
+        html += `</div>`;
+
+        // Required inputs
+        if (template.required_inputs && template.required_inputs.length > 0) {
+            template.required_inputs.forEach(input => {
+                html += generateBatchInputField(input, i, true);
+            });
+        }
+
+        // Optional inputs
+        if (template.optional_inputs && template.optional_inputs.length > 0) {
+            template.optional_inputs.forEach(input => {
+                html += generateBatchInputField(input, i, false);
+            });
+        }
+
+        html += `</div>`;
+        html += `</div>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+/**
+ * Generate input field for batch
+ */
+function generateBatchInputField(input, videoIndex, isRequired) {
+    const fieldName = `batch_videos[${videoIndex-1}][inputs][${input.name}]`;
+    const fieldId = `batch_${input.name}_${videoIndex}`;
+    const requiredAttr = isRequired ? 'required' : '';
+    const requiredMark = isRequired ? '<span class="text-danger">*</span>' : '';
+
+    let html = `<div class="form-group">`;
+    html += `<label for="${fieldId}">${input.label} ${requiredMark}</label>`;
+
+    switch (input.type) {
+        case 'text':
+            html += `<input type="text" name="${fieldName}" id="${fieldId}" class="form-control" ${requiredAttr} placeholder="${input.placeholder || ''}">`;
+            break;
+
+        case 'textarea':
+            html += `<textarea name="${fieldName}" id="${fieldId}" class="form-control" rows="3" ${requiredAttr} placeholder="${input.placeholder || ''}"></textarea>`;
+            break;
+
+        case 'image':
+            html += `<input type="file" name="${fieldName}" id="${fieldId}" class="form-control-file" accept="image/*" ${requiredAttr}>`;
+            html += `<small class="form-text text-muted">${input.placeholder || 'Chọn hình ảnh'}</small>`;
+            break;
+
+        case 'images':
+            html += `<input type="file" name="${fieldName}[]" id="${fieldId}" class="form-control-file" accept="image/*" multiple ${requiredAttr}>`;
+            html += `<small class="form-text text-muted">${input.placeholder || 'Chọn nhiều hình ảnh'}</small>`;
+            break;
+
+        case 'video':
+            html += `<input type="file" name="${fieldName}" id="${fieldId}" class="form-control-file" accept="video/*" ${requiredAttr}>`;
+            html += `<small class="form-text text-muted">${input.placeholder || 'Chọn file video'}</small>`;
+            break;
+
+        case 'audio':
+            html += `<input type="file" name="${fieldName}" id="${fieldId}" class="form-control-file" accept="audio/*" ${requiredAttr}>`;
+            html += `<small class="form-text text-muted">${input.placeholder || 'Chọn file âm thanh'}</small>`;
+            break;
+
+        case 'select':
+            html += `<select name="${fieldName}" id="${fieldId}" class="form-control" ${requiredAttr}>`;
+            html += `<option value="">${input.placeholder || 'Chọn...'}</option>`;
+            if (input.options) {
+                Object.entries(input.options).forEach(([value, label]) => {
+                    html += `<option value="${value}">${label}</option>`;
+                });
+            }
+            html += `</select>`;
+            break;
+
+        case 'number':
+            html += `<input type="number" name="${fieldName}" id="${fieldId}" class="form-control" ${requiredAttr} placeholder="${input.placeholder || ''}">`;
+            break;
+
+        case 'checkbox':
+            html += `<div class="form-check">`;
+            html += `<input type="checkbox" name="${fieldName}" id="${fieldId}" class="form-check-input" value="1">`;
+            html += `<label class="form-check-label" for="${fieldId}">${input.placeholder || input.label}</label>`;
+            html += `</div>`;
+            break;
+
+        default:
+            html += `<input type="text" name="${fieldName}" id="${fieldId}" class="form-control" ${requiredAttr} placeholder="${input.placeholder || ''}">`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
 </script>
 
 <!-- Video Preview Script -->

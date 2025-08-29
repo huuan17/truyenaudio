@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#EF4444;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F97316;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background rounded rectangle -->
+  <rect x="20" y="20" width="160" height="160" rx="30" ry="30" fill="url(#grad2)" stroke="#ffffff" stroke-width="4"/>
+  
+  <!-- Logo text -->
+  <text x="100" y="90" font-family="Arial, sans-serif" font-size="24" font-weight="bold" 
+        text-anchor="middle" fill="#ffffff">BRAND</text>
+  <text x="100" y="120" font-family="Arial, sans-serif" font-size="16" 
+        text-anchor="middle" fill="#ffffff" opacity="0.9">Studio</text>
+  
+  <!-- Decorative star -->
+  <polygon points="100,40 105,55 120,55 108,65 113,80 100,70 87,80 92,65 80,55 95,55" 
+           fill="#ffffff" opacity="0.8"/>
+</svg>

@@ -518,6 +518,9 @@
       padding: 4px 0;
     }
   </style>
+
+  <!-- Page-specific head scripts -->
+  @stack('head-scripts')
 </head>
 <body class="hold-transition sidebar-mini">
 <div class="wrapper">
@@ -637,13 +640,13 @@
 
 
           <!-- 3. Mạng Xã Hội (Collapsible) -->
-          <li class="nav-item {{ request()->routeIs('admin.channels.*') || request()->routeIs('admin.scheduled-posts.*') ? 'menu-open' : '' }}">
-            <a href="#" class="nav-link {{ request()->routeIs('admin.channels.*') || request()->routeIs('admin.scheduled-posts.*') ? 'active' : '' }}">
+          <li class="nav-item {{ request()->routeIs('admin.channels.*') || request()->routeIs('admin.scheduled-posts.*') || request()->routeIs('admin.video-publishing.*') ? 'menu-open' : '' }}">
+            <a href="#" class="nav-link {{ request()->routeIs('admin.channels.*') || request()->routeIs('admin.scheduled-posts.*') || request()->routeIs('admin.video-publishing.*') ? 'active' : '' }}">
               <i class="nav-icon fas fa-share-alt text-info"></i>
               <p>
                 Mạng Xã Hội
                 <i class="fas fa-angle-left right"></i>
-                <span class="badge badge-success right">2</span>
+                <span class="badge badge-success right">3</span>
               </p>
             </a>
             <ul class="nav nav-treeview">
@@ -651,6 +654,13 @@
                 <a href="{{ route('admin.channels.index') }}" class="nav-link {{ request()->routeIs('admin.channels.*') ? 'active' : '' }}">
                   <i class="fas fa-broadcast-tower nav-icon"></i>
                   <p>Quản Lý Kênh</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{{ route('admin.video-publishing.index') }}" class="nav-link {{ request()->routeIs('admin.video-publishing.*') ? 'active' : '' }}">
+                  <i class="fas fa-upload nav-icon text-warning"></i>
+                  <p>Quản lý đăng video</p>
+                  <span class="badge badge-warning right">New</span>
                 </a>
               </li>
               <li class="nav-item">
@@ -906,8 +916,27 @@
   </div>
 </div>
 
-<!-- jQuery (Local) -->
+<!-- jQuery (Local with fallback) -->
 <script src="{{ asset('assets/js/jquery-3.7.1.min.js') }}"></script>
+<script>
+// Immediate jQuery check and $ alias setup
+if (typeof jQuery !== 'undefined') {
+    // Ensure $ is available and not conflicted
+    window.$ = jQuery.noConflict(false);
+    window.jQuery = jQuery;
+    console.log('🚀 jQuery loaded immediately, $ available:', typeof $ !== 'undefined');
+    console.log('🚀 jQuery version:', jQuery.fn.jquery);
+} else {
+    console.error('🚨 jQuery failed to load immediately!');
+}
+</script>
+<script>
+// Fallback jQuery loading
+if (typeof jQuery === 'undefined') {
+    console.warn('Primary jQuery failed, trying fallback...');
+    document.write('<script src="{{ asset('assets/js/jquery.min.js') }}"><\/script>');
+}
+</script>
 <!-- Bootstrap (Local) -->
 <script src="{{ asset('assets/js/bootstrap-4.6.2.bundle.min.js') }}"></script>
 <!-- AdminLTE (Local) -->
@@ -923,6 +952,22 @@
 
 <!-- Toastr (Local) -->
 <script src="{{ asset('assets/js/toastr.min.js') }}"></script>
+
+<script>
+// Debug jQuery loading after all scripts
+if (typeof jQuery !== 'undefined') {
+    console.log('✅ jQuery loaded successfully, version:', jQuery.fn.jquery);
+    console.log('✅ $ is available:', typeof $ !== 'undefined');
+
+    // Ensure $ is available globally
+    if (typeof $ === 'undefined') {
+        window.$ = jQuery;
+        console.log('✅ $ alias created');
+    }
+} else {
+    console.error('❌ jQuery failed to load!');
+}
+</script>
 <script>
     $(document).ready(function() {
         $('.select2').select2({

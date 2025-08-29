@@ -22,15 +22,25 @@ class VideoSubtitleService
         try {
             $outputPath = $options['output_path'] ?? $this->generateOutputPath($videoPath);
 
+            // Get actual video duration if not provided
+            if (!$audioDuration) {
+                $audioDuration = $this->getVideoDuration($videoPath);
+            }
+
             Log::info('VIDEO SUBTITLE: Creating video with Vietnamese subtitle', [
                 'video_path' => $videoPath,
                 'subtitle_length' => strlen($subtitleText),
                 'audio_duration' => $audioDuration,
+                'actual_video_duration' => $this->getVideoDuration($videoPath),
                 'output_path' => $outputPath
             ]);
 
             // 🔥🔥🔥 FORCE VIETNAMESE ENCODING: Tạo file SRT với UTF-8 encoding
-            $srtResult = $this->subtitleService->createSrtFile($subtitleText, $audioDuration);
+            // Use actual video duration to ensure subtitles cover the entire video
+            $actualVideoDuration = $this->getVideoDuration($videoPath);
+            $subtitleDuration = max($audioDuration ?? 0, $actualVideoDuration);
+
+            $srtResult = $this->subtitleService->createSrtFile($subtitleText, $subtitleDuration);
 
             if (!$srtResult['success']) {
                 throw new \Exception('Failed to create SRT file: ' . $srtResult['error']);
@@ -84,17 +94,60 @@ class VideoSubtitleService
     {
         // Cấu hình mặc định với font fallback cho Windows
         $defaultFont = $this->getVietnameseFontName();
+
+        // Process options to convert string values to proper types
+        Log::info('VIDEO SUBTITLE: Before processing options', [
+            'original_options' => $options
+        ]);
+
+        $processedOptions = $this->processSubtitleOptions($options);
+
+        Log::info('VIDEO SUBTITLE: After processing options', [
+            'processed_options' => $processedOptions
+        ]);
+
         $config = array_merge([
+            // Font settings
             'font_name' => $defaultFont, // Font hỗ trợ tiếng Việt
             'font_size' => 24,
             'font_color' => 'white',
+            'bold' => false,
+            'italic' => false,
+
+            // Background settings
+            'background_color' => 'none',
+            'box_border_width' => 5,
+
+            // Outline/Border settings
             'outline_color' => 'black',
             'outline_width' => 2,
-            'position' => 'bottom', // top, center, bottom
+
+            // Shadow settings
+            'shadow' => false,
+            'shadow_x' => 2,
+            'shadow_y' => 2,
+            'shadow_color' => 'black',
+
+            // Position settings
+            'position' => 'bottom', // top, center, bottom, top-left, top-right, etc.
             'margin' => 50,
+            'text_align' => 'center', // left, center, right
+
+            // Text formatting
+            'line_spacing' => 0,
+            'text_w' => null, // Text wrapping width
+            'opacity' => 1.0,
+
+            // Technical settings
             'hard_subtitle' => true, // Gắn cứng
             'encoding' => 'UTF-8'
-        ], $options);
+        ], $processedOptions);
+
+        Log::info('VIDEO SUBTITLE: Final config after processing', [
+            'original_options' => $options,
+            'processed_options' => $processedOptions,
+            'final_config' => $config
+        ]);
         
         Log::info('VIDEO SUBTITLE: Embedding subtitle with FFmpeg', [
             'video_path' => $videoPath,
@@ -110,7 +163,7 @@ class VideoSubtitleService
     }
     
     /**
-     * Gắn cứng subtitle (hard subtitle) - FIXED VERSION
+     * Gắn cứng subtitle (hard subtitle) - ENHANCED VERSION with full customization
      */
     private function embedHardSubtitle($videoPath, $srtPath, $outputPath, $config)
     {
@@ -123,8 +176,8 @@ class VideoSubtitleService
         $srtPathForFilter = str_replace('\\', '/', $srtPath);
         $srtPathForFilter = str_replace(':', '\\:', $srtPathForFilter);
 
-        // Thử approach đơn giản hơn - không dùng force_style
-        $subtitleFilter = "subtitles='{$srtPathForFilter}':charenc=UTF-8";
+        // Build advanced subtitle filter with full customization support
+        $subtitleFilter = $this->buildAdvancedSubtitleFilter($srtPathForFilter, $config);
 
         // Command FFmpeg
         $cmd = "ffmpeg -i {$videoPathEscaped} -vf \"{$subtitleFilter}\" -c:a copy {$outputPathEscaped} -y";
@@ -321,7 +374,12 @@ class VideoSubtitleService
             // Normalize path cho FFmpeg
             $textFileForFilter = str_replace('\\', '/', $textFilePath);
 
-            $filter = "drawtext=textfile='{$textFileForFilter}':fontsize={$config['font_size']}:fontcolor={$config['font_color']}:x=(w-text_w)/2:y=h-text_h-{$config['margin']}:enable='between(t,{$start},{$end})'";
+            // Build advanced drawtext filter with full customization
+            $filter = $this->buildAdvancedDrawtextFilter($textFileForFilter, $config, true);
+
+            // Add timing
+            $filter .= ":enable='between(t,{$start},{$end})'";
+
             $filters[] = $filter;
         }
 
@@ -375,7 +433,12 @@ class VideoSubtitleService
             // Convert Vietnamese to safe characters for drawtext
             $safeText = $this->convertVietnameseToSafe($text);
 
-            $filter = "drawtext=text='{$safeText}':fontsize={$config['font_size']}:fontcolor={$config['font_color']}:x=(w-text_w)/2:y=h-text_h-{$config['margin']}:enable='between(t,{$start},{$end})'";
+            // Build advanced drawtext filter with full customization
+            $filter = $this->buildAdvancedDrawtextFilter($safeText, $config, false);
+
+            // Add timing
+            $filter .= ":enable='between(t,{$start},{$end})'";
+
             $filters[] = $filter;
         }
 
@@ -551,8 +614,30 @@ class VideoSubtitleService
             'blue' => '0000FF',
             'yellow' => 'FFFF00'
         ];
-        
+
         return $colors[strtolower($color)] ?? 'FFFFFF';
+    }
+
+    /**
+     * Process background color for FFmpeg
+     */
+    private function processBackgroundColor($backgroundColor)
+    {
+        if (!$backgroundColor || $backgroundColor === 'none') {
+            return null;
+        }
+
+        // Map background color options to FFmpeg format
+        $backgroundMap = [
+            'black' => 'black@0.7',           // Black with transparency
+            'white' => 'white@0.7',           // White with transparency
+            'solid_black' => 'black@1.0',     // Solid black
+            'solid_white' => 'white@1.0',     // Solid white
+            'transparent_black' => 'black@0.5', // More transparent black
+            'transparent_white' => 'white@0.5'  // More transparent white
+        ];
+
+        return $backgroundMap[$backgroundColor] ?? 'black@0.7';
     }
     
     /**
@@ -738,5 +823,430 @@ class VideoSubtitleService
 
         // Default fallback
         return 'Arial';
+    }
+
+    /**
+     * Process subtitle options to convert string values to proper types - ENHANCED
+     */
+    private function processSubtitleOptions($options)
+    {
+        $processed = $options;
+
+        // Convert font_size from string to number with more options
+        if (isset($processed['font_size'])) {
+            $sizeMap = [
+                'tiny' => 14,
+                'small' => 18,
+                'medium' => 24,
+                'large' => 32,
+                'extra-large' => 40,
+                'huge' => 48,
+                'massive' => 56
+            ];
+
+            if (is_string($processed['font_size']) && isset($sizeMap[$processed['font_size']])) {
+                $processed['font_size'] = $sizeMap[$processed['font_size']];
+            } elseif (is_numeric($processed['font_size'])) {
+                $processed['font_size'] = max(10, min(100, (int)$processed['font_size'])); // Limit between 10-100
+            }
+        }
+
+        // Process font color with more options
+        if (isset($processed['font_color'])) {
+            $processed['font_color'] = $this->processFontColor($processed['font_color']);
+        }
+
+        // Process background color
+        if (isset($processed['background_color'])) {
+            $processed['background_color'] = $this->processBackgroundColor($processed['background_color']);
+        }
+
+        // Process outline/border options
+        if (isset($processed['outline_width'])) {
+            $processed['outline_width'] = max(0, min(10, (int)$processed['outline_width'])); // Limit 0-10
+        }
+
+        if (isset($processed['outline_color'])) {
+            $processed['outline_color'] = $this->processFontColor($processed['outline_color']);
+        }
+
+        // Process position with more options
+        if (isset($processed['position'])) {
+            $positionMap = [
+                'top' => 'top',
+                'top-left' => 'top-left',
+                'top-right' => 'top-right',
+                'center' => 'center',
+                'center-left' => 'center-left',
+                'center-right' => 'center-right',
+                'bottom' => 'bottom',
+                'bottom-left' => 'bottom-left',
+                'bottom-right' => 'bottom-right'
+            ];
+
+            if (isset($positionMap[$processed['position']])) {
+                $processed['position'] = $positionMap[$processed['position']];
+            }
+        }
+
+        // Process margin
+        if (isset($processed['margin'])) {
+            $processed['margin'] = max(10, min(200, (int)$processed['margin'])); // Limit 10-200
+        }
+
+        // Process transparency/opacity
+        if (isset($processed['opacity'])) {
+            $processed['opacity'] = max(0.1, min(1.0, (float)$processed['opacity'])); // Limit 0.1-1.0
+        }
+
+        Log::info('VIDEO SUBTITLE: Processed subtitle options', [
+            'original_options' => $options,
+            'processed_options' => $processed
+        ]);
+
+        return $processed;
+    }
+
+    /**
+     * Build advanced subtitle filter with full FFmpeg customization
+     */
+    private function buildAdvancedSubtitleFilter($srtPath, $config)
+    {
+        // Base subtitle filter
+        $filter = "subtitles='{$srtPath}':charenc=UTF-8";
+
+        // Build force_style for advanced customization
+        $forceStyleOptions = [];
+
+        // Font name
+        if (!empty($config['font_name'])) {
+            $forceStyleOptions[] = "FontName={$config['font_name']}";
+        }
+
+        // Font size
+        if (!empty($config['font_size'])) {
+            $forceStyleOptions[] = "FontSize={$config['font_size']}";
+        }
+
+        // Primary color (font color) - convert to ASS format (&Hbbggrr&)
+        if (!empty($config['font_color'])) {
+            $primaryColor = $this->convertColorToASS($config['font_color']);
+            $forceStyleOptions[] = "PrimaryColour={$primaryColor}";
+        }
+
+        // Outline color
+        if (!empty($config['outline_color'])) {
+            $outlineColor = $this->convertColorToASS($config['outline_color']);
+            $forceStyleOptions[] = "OutlineColour={$outlineColor}";
+        }
+
+        // Outline width
+        if (isset($config['outline_width'])) {
+            $forceStyleOptions[] = "Outline={$config['outline_width']}";
+        }
+
+        // Background/shadow color
+        if (!empty($config['background_color']) && $config['background_color'] !== 'none') {
+            $backColor = $this->convertColorToASS($config['background_color']);
+            $forceStyleOptions[] = "BackColour={$backColor}";
+            $forceStyleOptions[] = "Shadow=1";
+        }
+
+        // Alignment based on position
+        $alignment = $this->getAlignmentFromPosition($config['position'] ?? 'bottom');
+        $forceStyleOptions[] = "Alignment={$alignment}";
+
+        // Margin
+        if (!empty($config['margin'])) {
+            $margin = $config['margin'];
+            $forceStyleOptions[] = "MarginV={$margin}";
+            $forceStyleOptions[] = "MarginL={$margin}";
+            $forceStyleOptions[] = "MarginR={$margin}";
+        }
+
+        // Bold and italic
+        if (!empty($config['bold'])) {
+            $forceStyleOptions[] = "Bold=" . ($config['bold'] ? '1' : '0');
+        }
+
+        if (!empty($config['italic'])) {
+            $forceStyleOptions[] = "Italic=" . ($config['italic'] ? '1' : '0');
+        }
+
+        // Add force_style if we have options
+        if (!empty($forceStyleOptions)) {
+            $forceStyle = implode(',', $forceStyleOptions);
+            $filter .= ":force_style='{$forceStyle}'";
+        }
+
+        Log::info('VIDEO SUBTITLE: Built advanced subtitle filter', [
+            'filter' => $filter,
+            'force_style_options' => $forceStyleOptions,
+            'config' => $config
+        ]);
+
+        return $filter;
+    }
+
+    /**
+     * Process font color with extended color support
+     */
+    private function processFontColor($color)
+    {
+        $colorMap = [
+            'white' => 'white',
+            'black' => 'black',
+            'red' => 'red',
+            'green' => 'green',
+            'blue' => 'blue',
+            'yellow' => 'yellow',
+            'cyan' => 'cyan',
+            'magenta' => 'magenta',
+            'orange' => '#FFA500',
+            'purple' => '#800080',
+            'pink' => '#FFC0CB',
+            'brown' => '#A52A2A',
+            'gray' => '#808080',
+            'grey' => '#808080',
+            'lime' => '#00FF00',
+            'navy' => '#000080',
+            'silver' => '#C0C0C0',
+            'gold' => '#FFD700'
+        ];
+
+        // If it's a hex color, return as is
+        if (preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
+            return $color;
+        }
+
+        // If it's a named color, return mapped value
+        return $colorMap[strtolower($color)] ?? 'white';
+    }
+
+    /**
+     * Convert color to ASS format (&Hbbggrr&)
+     */
+    private function convertColorToASS($color)
+    {
+        // Process color first
+        $processedColor = $this->processFontColor($color);
+
+        // Convert hex to ASS format
+        if (preg_match('/^#([0-9A-Fa-f]{6})$/', $processedColor, $matches)) {
+            $hex = $matches[1];
+            $r = hexdec(substr($hex, 0, 2));
+            $g = hexdec(substr($hex, 2, 2));
+            $b = hexdec(substr($hex, 4, 2));
+            return sprintf('&H%02X%02X%02X&', $b, $g, $r); // ASS format is BGR
+        }
+
+        // Handle named colors
+        $namedColors = [
+            'white' => '&HFFFFFF&',
+            'black' => '&H000000&',
+            'red' => '&H0000FF&',
+            'green' => '&H00FF00&',
+            'blue' => '&HFF0000&',
+            'yellow' => '&H00FFFF&',
+            'cyan' => '&HFFFF00&',
+            'magenta' => '&HFF00FF&'
+        ];
+
+        return $namedColors[strtolower($processedColor)] ?? '&HFFFFFF&';
+    }
+
+    /**
+     * Get ASS alignment number from position
+     */
+    private function getAlignmentFromPosition($position)
+    {
+        $alignmentMap = [
+            'bottom-left' => 1,
+            'bottom' => 2,
+            'bottom-right' => 3,
+            'center-left' => 4,
+            'center' => 5,
+            'center-right' => 6,
+            'top-left' => 7,
+            'top' => 8,
+            'top-right' => 9
+        ];
+
+        return $alignmentMap[$position] ?? 2; // Default to bottom center
+    }
+
+    /**
+     * Build advanced drawtext filter with full customization support
+     */
+    private function buildAdvancedDrawtextFilter($text, $config, $isTextFile = false)
+    {
+        // Start building the filter
+        if ($isTextFile) {
+            $filter = "drawtext=textfile='{$text}'";
+        } else {
+            $filter = "drawtext=text='{$text}'";
+        }
+
+        // Font size
+        $fontSize = $config['font_size'] ?? 24;
+        $filter .= ":fontsize={$fontSize}";
+
+        // Font color
+        $fontColor = $this->processFontColor($config['font_color'] ?? 'white');
+        $filter .= ":fontcolor={$fontColor}";
+
+        // Font file (for Vietnamese support)
+        if (!empty($config['font_name'])) {
+            $fontPath = $this->getFontPath($config['font_name']);
+            if ($fontPath) {
+                $filter .= ":fontfile='{$fontPath}'";
+            }
+        }
+
+        // Position calculation based on config
+        $position = $this->calculateDrawtextPosition($config);
+        $filter .= ":x={$position['x']}:y={$position['y']}";
+
+        // Background box
+        if (isset($config['background_color']) && $config['background_color'] !== 'none') {
+            $bgColor = $this->processBackgroundColorForDrawtext($config['background_color']);
+            if ($bgColor) {
+                $filter .= ":box=1:boxcolor={$bgColor}";
+
+                // Box border width
+                $boxBorderWidth = $config['box_border_width'] ?? 5;
+                $filter .= ":boxborderw={$boxBorderWidth}";
+            }
+        }
+
+        // Outline/Border
+        $outlineWidth = $config['outline_width'] ?? 2;
+        if ($outlineWidth > 0) {
+            $filter .= ":borderw={$outlineWidth}";
+
+            $outlineColor = $this->processFontColor($config['outline_color'] ?? 'black');
+            $filter .= ":bordercolor={$outlineColor}";
+        }
+
+        // Shadow
+        if (!empty($config['shadow'])) {
+            $shadowX = $config['shadow_x'] ?? 2;
+            $shadowY = $config['shadow_y'] ?? 2;
+            $filter .= ":shadowx={$shadowX}:shadowy={$shadowY}";
+
+            $shadowColor = $this->processFontColor($config['shadow_color'] ?? 'black');
+            $filter .= ":shadowcolor={$shadowColor}";
+        }
+
+        // Text alignment
+        if (!empty($config['text_align'])) {
+            $alignMap = [
+                'left' => 'left',
+                'center' => 'center',
+                'right' => 'right'
+            ];
+            $textAlign = $alignMap[$config['text_align']] ?? 'center';
+            $filter .= ":text_align={$textAlign}";
+        }
+
+        // Line spacing
+        if (!empty($config['line_spacing'])) {
+            $filter .= ":line_spacing={$config['line_spacing']}";
+        }
+
+        // Text wrapping
+        if (!empty($config['text_w'])) {
+            $filter .= ":text_w={$config['text_w']}";
+        }
+
+        Log::info('VIDEO SUBTITLE: Built advanced drawtext filter', [
+            'filter' => $filter,
+            'config' => $config,
+            'is_text_file' => $isTextFile
+        ]);
+
+        return $filter;
+    }
+
+    /**
+     * Calculate position for drawtext based on config
+     */
+    private function calculateDrawtextPosition($config)
+    {
+        $position = $config['position'] ?? 'bottom';
+        $margin = $config['margin'] ?? 50;
+
+        switch ($position) {
+            case 'top':
+                return ['x' => '(w-text_w)/2', 'y' => $margin];
+            case 'top-left':
+                return ['x' => $margin, 'y' => $margin];
+            case 'top-right':
+                return ['x' => "w-text_w-{$margin}", 'y' => $margin];
+            case 'center':
+                return ['x' => '(w-text_w)/2', 'y' => '(h-text_h)/2'];
+            case 'center-left':
+                return ['x' => $margin, 'y' => '(h-text_h)/2'];
+            case 'center-right':
+                return ['x' => "w-text_w-{$margin}", 'y' => '(h-text_h)/2'];
+            case 'bottom-left':
+                return ['x' => $margin, 'y' => "h-text_h-{$margin}"];
+            case 'bottom-right':
+                return ['x' => "w-text_w-{$margin}", 'y' => "h-text_h-{$margin}"];
+            case 'bottom':
+            default:
+                return ['x' => '(w-text_w)/2', 'y' => "h-text_h-{$margin}"];
+        }
+    }
+
+    /**
+     * Process background color specifically for drawtext filter
+     */
+    private function processBackgroundColorForDrawtext($backgroundColor)
+    {
+        if (!$backgroundColor || $backgroundColor === 'none') {
+            return null;
+        }
+
+        // Map background color options to drawtext format
+        $backgroundMap = [
+            'black' => 'black@0.7',
+            'white' => 'white@0.7',
+            'solid_black' => 'black@1.0',
+            'solid_white' => 'white@1.0',
+            'transparent_black' => 'black@0.5',
+            'transparent_white' => 'white@0.5',
+            'red' => 'red@0.7',
+            'green' => 'green@0.7',
+            'blue' => 'blue@0.7',
+            'yellow' => 'yellow@0.7'
+        ];
+
+        return $backgroundMap[$backgroundColor] ?? 'black@0.7';
+    }
+
+    /**
+     * Get font path for Vietnamese support
+     */
+    private function getFontPath($fontName)
+    {
+        // Common Vietnamese-supporting fonts on Windows
+        $fontPaths = [
+            'Arial' => 'C:/Windows/Fonts/arial.ttf',
+            'Times New Roman' => 'C:/Windows/Fonts/times.ttf',
+            'Calibri' => 'C:/Windows/Fonts/calibri.ttf',
+            'Tahoma' => 'C:/Windows/Fonts/tahoma.ttf',
+            'Verdana' => 'C:/Windows/Fonts/verdana.ttf',
+            'Segoe UI' => 'C:/Windows/Fonts/segoeui.ttf'
+        ];
+
+        $fontPath = $fontPaths[$fontName] ?? null;
+
+        // Check if font file exists
+        if ($fontPath && file_exists($fontPath)) {
+            return str_replace('\\', '/', $fontPath);
+        }
+
+        return null;
     }
 }

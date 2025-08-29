@@ -18,10 +18,23 @@ class VideoGenerationService
      */
     public function queueSingleVideo($platform, Request $request, $userId)
     {
+        // 🔥 DEBUG: Log service input
+        Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: queueSingleVideo called', [
+            'platform' => $platform,
+            'user_id' => $userId,
+            'request_all' => $request->all(),
+            'request_files' => $request->allFiles(),
+            'media_type' => $request->input('media_type'),
+            'audio_source' => $request->input('audio_source'),
+            'slide_duration' => $request->input('slide_duration'),
+            'slide_transition' => $request->input('slide_transition'),
+            'images_uploaded' => $request->hasFile('images') ? count($request->file('images')) : 0
+        ]);
+
         // Create temp directory
         $tempId = uniqid();
         $tempDir = storage_path("app/videos/temp/{$platform}_{$tempId}");
-        
+
         if (!File::isDirectory($tempDir)) {
             File::makeDirectory($tempDir, 0755, true);
         }
@@ -137,14 +150,17 @@ class VideoGenerationService
 
             // Prepare options for video generation
             $options = [
-                'final_output_path' => $parameters['--output'] ?? storage_path('app/videos/' . uniqid('vietnamese_') . '.mp4'),
+                'final_output_path' => $parameters['--output'] ?? storage_path('app/videos/generated/' . uniqid('vietnamese_') . '.mp4'),
                 'platform' => $platform,
                 'slide_duration' => $parameters['--slide-duration'] ?? 3,
                 'slide_transition' => $parameters['--slide-transition'] ?? 'slide',
                 'subtitle_size' => $parameters['--subtitle-size'] ?? 24,
                 'subtitle_color' => $parameters['--subtitle-color'] ?? 'white',
+                'subtitle_background' => $parameters['--subtitle-background'] ?? 'none',
                 'subtitle_position' => $parameters['--subtitle-position'] ?? 'bottom',
                 'subtitle_font' => $parameters['--subtitle-font'] ?? 'Arial Unicode MS',
+                'resolution' => $parameters['--resolution'] ?? '1920x1080',
+                'fps' => $parameters['--fps'] ?? '25',
                 'force_vietnamese_encoding' => true // Force Vietnamese encoding
             ];
 
@@ -215,6 +231,7 @@ class VideoGenerationService
                     'output_path' => $tempDir . '/video_with_vietnamese_subtitle.mp4',
                     'font_size' => $options['subtitle_size'] ?? 24,
                     'font_color' => $options['subtitle_color'] ?? 'white',
+                    'background_color' => $options['subtitle_background'] ?? 'none',
                     'position' => $options['subtitle_position'] ?? 'bottom',
                     'font_name' => $options['subtitle_font'] ?? 'Arial Unicode MS',
                     'hard_subtitle' => true,
@@ -246,7 +263,7 @@ class VideoGenerationService
             }
 
             // Step 3: Move to final location
-            $outputPath = $options['final_output_path'] ?? storage_path('app/videos/' . uniqid('vietnamese_') . '.mp4');
+            $outputPath = $options['final_output_path'] ?? storage_path('app/videos/generated/' . uniqid('vietnamese_') . '.mp4');
 
             // Ensure output directory exists
             $outputDir = dirname($outputPath);
@@ -292,10 +309,17 @@ class VideoGenerationService
             $slideDuration = $options['slide_duration'] ?? 3;
             $outputPath = $tempDir . '/slideshow.mp4';
 
+            // Get resolution from options, default to 1920x1080
+            $resolution = $options['resolution'] ?? '1920x1080';
+            list($width, $height) = explode('x', $resolution);
+            $fps = $options['fps'] ?? '25';
+
             Log::info('🔥🔥🔥 FORCE OVERRIDE: Creating slideshow from images', [
                 'image_count' => count($imagePaths),
                 'slide_duration' => $slideDuration,
-                'output_path' => $outputPath
+                'output_path' => $outputPath,
+                'resolution' => $resolution,
+                'fps' => $fps
             ]);
 
             if (count($imagePaths) === 1) {
@@ -303,10 +327,12 @@ class VideoGenerationService
                 $imagePath = $imagePaths[0];
                 $totalDuration = $slideDuration * 3; // Minimum duration
 
-                $cmd = "ffmpeg -loop 1 -i \"{$imagePath}\" -vf \"scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080\" -t {$totalDuration} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 25 \"{$outputPath}\" -y";
+                $cmd = "ffmpeg -loop 1 -i \"{$imagePath}\" -vf \"scale={$width}:{$height}:force_original_aspect_ratio=increase,crop={$width}:{$height}\" -t {$totalDuration} -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r {$fps} \"{$outputPath}\" -y";
 
                 Log::info('🔥🔥🔥 FORCE OVERRIDE: Single image FFmpeg command', [
-                    'command' => $cmd
+                    'command' => $cmd,
+                    'resolution' => $resolution,
+                    'fps' => $fps
                 ]);
 
                 exec($cmd, $output, $returnCode);
@@ -318,16 +344,45 @@ class VideoGenerationService
                     throw new \Exception('Failed to create video from single image. Return code: ' . $returnCode);
                 }
             } else {
-                // Multiple images slideshow
+                // Multiple images slideshow with precise timing
                 $inputListPath = $tempDir . '/images.txt';
                 $inputList = '';
+                $totalExpectedDuration = 0;
 
-                foreach ($imagePaths as $image) {
+                foreach ($imagePaths as $index => $image) {
                     $inputList .= "file '" . str_replace('\\', '/', $image) . "'\n";
                     $inputList .= "duration {$slideDuration}\n";
+                    $totalExpectedDuration += $slideDuration;
                 }
 
-                // Add last image again for proper duration
+                // Add transition duration if transitions are enabled
+                $transition = $options['slide_transition'] ?? 'slide';
+
+                Log::info('🔥🔥🔥 DURATION DEBUG: Checking transition conditions', [
+                    'slide_transition_from_options' => $options['slide_transition'] ?? 'NOT_SET',
+                    'transition_final' => $transition,
+                    'transition_not_none' => $transition !== 'none',
+                    'image_count' => count($imagePaths),
+                    'image_count_gt_1' => count($imagePaths) > 1,
+                    'will_add_transition_duration' => ($transition !== 'none' && count($imagePaths) > 1)
+                ]);
+
+                if ($transition !== 'none' && count($imagePaths) > 1) {
+                    $transitionDuration = 0.5; // 0.5 second per transition
+                    $transitionCount = count($imagePaths) - 1; // n-1 transitions for n images
+                    $totalExpectedDuration += ($transitionCount * $transitionDuration);
+
+                    Log::info('🔥🔥🔥 DURATION: Added transition duration', [
+                        'slide_duration_per_image' => $slideDuration,
+                        'image_count' => count($imagePaths),
+                        'transition_duration_per_transition' => $transitionDuration,
+                        'transition_count' => $transitionCount,
+                        'total_transition_duration' => $transitionCount * $transitionDuration,
+                        'total_expected_duration' => $totalExpectedDuration
+                    ]);
+                }
+
+                // Add last image again for proper duration (FFmpeg requirement)
                 if (!empty($imagePaths)) {
                     $lastImage = end($imagePaths);
                     $inputList .= "file '" . str_replace('\\', '/', $lastImage) . "'\n";
@@ -335,11 +390,35 @@ class VideoGenerationService
 
                 File::put($inputListPath, $inputList);
 
-                $cmd = "ffmpeg -f concat -safe 0 -i \"{$inputListPath}\" -vf \"scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080\" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r 25 \"{$outputPath}\" -y";
+                // Check if transition effects are enabled
+                $transition = $options['slide_transition'] ?? 'slide';
+
+                Log::info('🔥🔥🔥 TRANSITION DEBUG: Checking transition conditions', [
+                    'transition' => $transition,
+                    'transition_not_none' => $transition !== 'none',
+                    'image_count' => count($imagePaths),
+                    'image_count_gt_1' => count($imagePaths) > 1,
+                    'will_use_transitions' => ($transition !== 'none' && count($imagePaths) > 1)
+                ]);
+
+                if ($transition !== 'none' && count($imagePaths) > 1) {
+                    // Use transition effects
+                    Log::info('🔥🔥🔥 TRANSITION DEBUG: Using transition effects');
+                    $cmd = $this->createSlideshowWithTransitions($imagePaths, $outputPath, $slideDuration, $transition, $width, $height, $fps);
+                } else {
+                    // Use simple concat without transitions
+                    Log::info('🔥🔥🔥 TRANSITION DEBUG: Using simple concat without transitions');
+                    $cmd = "ffmpeg -f concat -safe 0 -i \"{$inputListPath}\" -vf \"scale={$width}:{$height}:force_original_aspect_ratio=increase,crop={$width}:{$height}\" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r {$fps} -t {$totalExpectedDuration} \"{$outputPath}\" -y";
+                }
 
                 Log::info('🔥🔥🔥 FORCE OVERRIDE: Multiple images FFmpeg command', [
                     'command' => $cmd,
-                    'input_list_content' => $inputList
+                    'input_list_content' => $inputList,
+                    'resolution' => $resolution,
+                    'fps' => $fps,
+                    'image_count' => count($imagePaths),
+                    'slide_duration' => $slideDuration,
+                    'total_expected_duration' => $totalExpectedDuration
                 ]);
 
                 exec($cmd, $output, $returnCode);
@@ -359,6 +438,89 @@ class VideoGenerationService
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Create slideshow with transition effects
+     */
+    private function createSlideshowWithTransitions($imagePaths, $outputPath, $slideDuration, $transition, $width, $height, $fps)
+    {
+        $transitionDuration = 0.5; // 0.5 second transition
+        $imageCount = count($imagePaths);
+
+        // Calculate total duration with transitions
+        $totalDuration = ($imageCount * $slideDuration) + (($imageCount - 1) * $transitionDuration);
+
+        Log::info('🔥🔥🔥 DURATION: Added transition duration', [
+            'slide_duration_per_image' => $slideDuration,
+            'image_count' => $imageCount,
+            'transition_duration_per_transition' => $transitionDuration,
+            'transition_count' => $imageCount - 1,
+            'total_transition_duration' => ($imageCount - 1) * $transitionDuration,
+            'total_expected_duration' => $totalDuration,
+            'transition_type' => $transition
+        ]);
+
+        // Build complex filter for transitions
+        $inputs = '';
+        $filters = [];
+
+        // Add all images as inputs
+        foreach ($imagePaths as $index => $imagePath) {
+            $inputs .= "-loop 1 -t " . ($slideDuration + $transitionDuration) . " -i \"" . str_replace('\\', '/', $imagePath) . "\" ";
+        }
+
+        // Scale all inputs
+        for ($i = 0; $i < $imageCount; $i++) {
+            $filters[] = "[{$i}:v]scale={$width}:{$height}:force_original_aspect_ratio=increase,crop={$width}:{$height},setpts=PTS-STARTPTS[v{$i}]";
+        }
+
+        // Create transitions between images
+        $currentLabel = 'v0';
+        for ($i = 1; $i < $imageCount; $i++) {
+            $nextLabel = "v{$i}";
+            $outputLabel = ($i == $imageCount - 1) ? 'out' : "t{$i}";
+
+            $offset = ($i - 1) * $slideDuration + ($i - 1) * $transitionDuration;
+
+            switch ($transition) {
+                case 'fade':
+                    $filters[] = "[{$currentLabel}][{$nextLabel}]xfade=transition=fade:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+                    break;
+                case 'slide':
+                    $filters[] = "[{$currentLabel}][{$nextLabel}]xfade=transition=slideleft:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+                    break;
+                case 'zoom':
+                    $filters[] = "[{$currentLabel}][{$nextLabel}]xfade=transition=zoomin:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+                    break;
+                case 'dissolve':
+                    $filters[] = "[{$currentLabel}][{$nextLabel}]xfade=transition=dissolve:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+                    break;
+                case 'wipe':
+                    $filters[] = "[{$currentLabel}][{$nextLabel}]xfade=transition=wipeleft:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+                    break;
+                default:
+                    $filters[] = "[{$currentLabel}][{$nextLabel}]xfade=transition=fade:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+            }
+
+            $currentLabel = $outputLabel;
+        }
+
+        $filterComplex = implode(';', $filters);
+        $totalDuration = ($imageCount * $slideDuration) + (($imageCount - 1) * $transitionDuration);
+
+        $cmd = "ffmpeg {$inputs} -filter_complex \"{$filterComplex}\" -map \"[out]\" -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -r {$fps} -t {$totalDuration} \"{$outputPath}\" -y";
+
+        Log::info('🔥🔥🔥 FORCE OVERRIDE: Creating slideshow with transitions', [
+            'transition' => $transition,
+            'image_count' => $imageCount,
+            'slide_duration' => $slideDuration,
+            'transition_duration' => $transitionDuration,
+            'total_duration' => $totalDuration,
+            'command_preview' => substr($cmd, 0, 200) . '...'
+        ]);
+
+        return $cmd;
     }
 
     /**
@@ -477,39 +639,364 @@ class VideoGenerationService
             if ($request->audio_source === 'upload' && $request->hasFile('audio_file')) {
                 $audioPath = $request->file('audio_file')->store("temp/audio", 'local');
                 $noneParams['--audio-file'] = storage_path("app/{$audioPath}");
-            } elseif ($request->audio_source === 'library' && $request->library_audio_id) {
-                $noneParams['--library-audio-id'] = $request->library_audio_id;
-                // Increment usage count
-                $audioLibrary = \App\Models\AudioLibrary::find($request->library_audio_id);
-                if ($audioLibrary) {
-                    $audioLibrary->incrementUsage();
+            } elseif ($request->audio_source === 'library') {
+                $libraryAudioId = $request->library_audio_id;
+
+                Log::info('🔥🔥🔥 AUDIO LIBRARY DEBUG: Processing library audio', [
+                    'audio_source' => $request->audio_source,
+                    'library_audio_id_raw' => $libraryAudioId,
+                    'library_audio_id_type' => gettype($libraryAudioId),
+                    'library_audio_id_empty' => empty($libraryAudioId),
+                    'library_audio_id_numeric' => is_numeric($libraryAudioId)
+                ]);
+
+                if ($libraryAudioId && is_numeric($libraryAudioId)) {
+                    $noneParams['--library-audio-id'] = $libraryAudioId;
+                    // Increment usage count
+                    $audioLibrary = \App\Models\AudioLibrary::find($libraryAudioId);
+                    if ($audioLibrary) {
+                        $audioLibrary->incrementUsage();
+                        Log::info('🔥🔥🔥 AUDIO LIBRARY DEBUG: Found and incremented usage', [
+                            'audio_id' => $audioLibrary->id,
+                            'audio_title' => $audioLibrary->title
+                        ]);
+                    } else {
+                        Log::warning('🔥🔥🔥 AUDIO LIBRARY DEBUG: Audio not found in database', [
+                            'library_audio_id' => $libraryAudioId
+                        ]);
+                    }
+                } else {
+                    Log::warning('🔥🔥🔥 AUDIO LIBRARY DEBUG: Invalid library audio ID', [
+                        'library_audio_id' => $libraryAudioId,
+                        'audio_source' => $request->audio_source
+                    ]);
                 }
+            }
+
+            // Handle background audio/music
+            if ($request->background_audio_id && is_numeric($request->background_audio_id)) {
+                $noneParams['--background-audio-id'] = $request->background_audio_id;
+                $noneParams['--background-audio-volume'] = $request->background_audio_volume ?: 30;
+
+                // Increment usage count for background audio
+                $backgroundAudio = \App\Models\AudioLibrary::find($request->background_audio_id);
+                if ($backgroundAudio) {
+                    $backgroundAudio->incrementUsage();
+                    Log::info('🔥🔥🔥 BACKGROUND AUDIO DEBUG: Found and incremented usage', [
+                        'background_audio_id' => $backgroundAudio->id,
+                        'background_audio_title' => $backgroundAudio->title,
+                        'background_audio_volume' => $request->background_audio_volume ?: 30
+                    ]);
+                } else {
+                    Log::warning('🔥🔥🔥 BACKGROUND AUDIO DEBUG: Background audio not found in database', [
+                        'background_audio_id' => $request->background_audio_id
+                    ]);
+                }
+            }
+
+            // Handle logo settings
+            if ($request->enable_logo) {
+                $noneParams['--enable-logo'] = true;
+                $noneParams['--logo-source'] = $request->logo_source ?: 'library';
+
+                if ($request->logo_source === 'library' && $request->selected_logo) {
+                    $noneParams['--selected-logo'] = $request->selected_logo;
+                } elseif ($request->logo_source === 'upload' && $request->hasFile('logo_file')) {
+                    // Handle logo file upload
+                    $logoFile = $request->file('logo_file');
+                    $logoPath = $logoFile->store('temp/logos', 'public');
+                    $noneParams['--logo-file'] = storage_path('app/public/' . $logoPath);
+                }
+
+                // Logo positioning and styling
+                if ($request->logo_position) {
+                    $noneParams['--logo-position'] = $request->logo_position;
+                }
+                if ($request->logo_size) {
+                    $noneParams['--logo-size'] = $request->logo_size;
+                }
+                if ($request->logo_width) {
+                    $noneParams['--logo-width'] = $request->logo_width;
+                }
+                if ($request->logo_height) {
+                    $noneParams['--logo-height'] = $request->logo_height;
+                }
+                if ($request->logo_opacity) {
+                    $noneParams['--logo-opacity'] = $request->logo_opacity;
+                }
+                if ($request->logo_margin) {
+                    $noneParams['--logo-margin'] = $request->logo_margin;
+                }
+                if ($request->logo_duration) {
+                    $noneParams['--logo-duration'] = $request->logo_duration;
+                }
+                if ($request->logo_start_time) {
+                    $noneParams['--logo-start-time'] = $request->logo_start_time;
+                }
+                if ($request->logo_end_time) {
+                    $noneParams['--logo-end-time'] = $request->logo_end_time;
+                }
+
+                Log::info('🔥🔥🔥 LOGO DEBUG: Logo parameters added', [
+                    'logo_source' => $request->logo_source,
+                    'selected_logo' => $request->selected_logo,
+                    'logo_position' => $request->logo_position,
+                    'logo_size' => $request->logo_size
+                ]);
             }
 
             // Handle media files based on type
             if ($request->media_type === 'images') {
+                // 🔥 DEBUG: Log image processing
+                Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Processing images', [
+                    'media_type' => $request->media_type,
+                    'has_product_images' => $request->hasFile('product_images'),
+                    'has_images' => $request->hasFile('images'),
+                    'has_inputs_images' => $request->hasFile('inputs.images'),
+                    'slide_duration_input' => $request->slide_duration,
+                    'slide_transition_input' => $request->slide_transition,
+                    'all_files' => array_keys($request->allFiles())
+                ]);
+
                 // Check for images from different sources (template vs direct upload)
                 $imageFiles = null;
 
                 if ($request->hasFile('product_images')) {
                     $imageFiles = $request->file('product_images');
+                    Log::info('🔥🔥🔥 Using product_images', ['count' => count($imageFiles)]);
                 } elseif ($request->hasFile('images')) {
                     $imageFiles = $request->file('images');
+                    Log::info('🔥🔥🔥 Using images', ['count' => count($imageFiles)]);
                 } elseif ($request->hasFile('inputs.images')) {
                     $imageFiles = $request->file('inputs.images');
+                    Log::info('🔥🔥🔥 Using inputs.images', ['count' => count($imageFiles)]);
                 }
 
                 if ($imageFiles) {
-                    $noneParams['--slide-duration'] = $request->slide_duration ?: 3;
-                    $noneParams['--slide-transition'] = $request->slide_transition ?: 'slide';
+                    $slideDuration = $request->slide_duration ?: 3;
+                    $slideTransition = $request->slide_transition ?: 'slide';
+
+                    $noneParams['--slide-duration'] = $slideDuration;
+                    $noneParams['--slide-transition'] = $slideTransition;
+
+                    // Handle individual image durations and transitions
+                    $imageDurations = $request->input('image_durations', []);
+                    $imageTransitions = $request->input('image_transitions', []);
+
+                    if (!empty($imageDurations) && is_array($imageDurations)) {
+                        $noneParams['--image-durations'] = json_encode($imageDurations);
+                        Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Individual image durations', [
+                            'image_durations_raw' => $imageDurations,
+                            'image_durations_json' => json_encode($imageDurations),
+                            'image_count' => count($imageFiles)
+                        ]);
+                    }
+
+                    if (!empty($imageTransitions) && is_array($imageTransitions)) {
+                        $noneParams['--image-transitions'] = json_encode($imageTransitions);
+                        Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Individual image transitions', [
+                            'image_transitions_raw' => $imageTransitions,
+                            'image_transitions_json' => json_encode($imageTransitions),
+                            'image_count' => count($imageFiles)
+                        ]);
+                    }
+
+                    Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Image settings', [
+                        'slide_duration' => $slideDuration,
+                        'slide_transition' => $slideTransition,
+                        'image_count' => count($imageFiles),
+                        'has_individual_durations' => !empty($imageDurations)
+                    ]);
 
                     // Store multiple images
                     $imagePaths = [];
                     foreach ($imageFiles as $index => $image) {
                         $imagePath = $image->store("temp/images", 'local');
                         $imagePaths[] = storage_path("app/{$imagePath}");
+                        Log::info("🔥🔥🔥 Stored image {$index}", [
+                            'original_name' => $image->getClientOriginalName(),
+                            'stored_path' => storage_path("app/{$imagePath}")
+                        ]);
                     }
+
+                    // Apply image order if specified and get the mapping
+                    Log::info('🔄 Before applyImageOrder', [
+                        'request_image_orders' => $request->input('image_orders'),
+                        'request_image_order_mapping' => $request->input('image_order_mapping'),
+                        'original_image_paths' => array_map('basename', $imagePaths)
+                    ]);
+
+                    $originalImagePaths = $imagePaths; // Store original order
+                    $imagePaths = $this->applyImageOrder($imagePaths, $request);
+
                     $noneParams['--images'] = implode(',', $imagePaths);
+
+                    // Also reorder durations and transitions if they exist
+                    $imageDurations = $request->input('image_durations', []);
+                    $imageTransitions = $request->input('image_transitions', []);
+
+                    if (!empty($imageDurations) && is_array($imageDurations)) {
+                        // Get the order mapping used for reordering
+                        $orderMapping = $request->input('image_order_mapping');
+                        $imageOrders = $request->input('image_orders');
+
+                        // Use image_orders if no mapping provided
+                        if (!$orderMapping && $imageOrders && is_array($imageOrders)) {
+                            $orderMappingArray = [];
+                            foreach ($imageOrders as $originalIndex => $orderValue) {
+                                $orderMappingArray[(string)$originalIndex] = intval($orderValue);
+                            }
+                            $orderMapping = json_encode((object)$orderMappingArray);
+                        }
+
+                        if ($orderMapping) {
+                            $originalDurations = $imageDurations;
+                            $imageDurations = $this->reorderArrayByMapping($imageDurations, $orderMapping);
+
+                            Log::info('🔄 Reordered image durations', [
+                                'original_durations' => $originalDurations,
+                                'reordered_durations' => $imageDurations,
+                                'order_mapping' => $orderMapping
+                            ]);
+                        }
+                    }
+
+                    if (!empty($imageTransitions) && is_array($imageTransitions)) {
+                        // Get the order mapping used for reordering
+                        $orderMapping = $request->input('image_order_mapping');
+                        $imageOrders = $request->input('image_orders');
+
+                        // Use image_orders if no mapping provided
+                        if (!$orderMapping && $imageOrders && is_array($imageOrders)) {
+                            $orderMappingArray = [];
+                            foreach ($imageOrders as $originalIndex => $orderValue) {
+                                $orderMappingArray[(string)$originalIndex] = intval($orderValue);
+                            }
+                            $orderMapping = json_encode((object)$orderMappingArray);
+                        }
+
+                        if ($orderMapping) {
+                            $originalTransitions = $imageTransitions;
+                            $imageTransitions = $this->reorderArrayByMapping($imageTransitions, $orderMapping);
+
+                            Log::info('🔄 Reordered image transitions', [
+                                'original_transitions' => $originalTransitions,
+                                'reordered_transitions' => $imageTransitions,
+                                'order_mapping' => $orderMapping
+                            ]);
+                        }
+                    }
+
+                    // Update the parameters with reordered arrays
+                    if (!empty($imageDurations) && is_array($imageDurations)) {
+                        $noneParams['--image-durations'] = json_encode($imageDurations);
+                    }
+
+                    if (!empty($imageTransitions) && is_array($imageTransitions)) {
+                        $noneParams['--image-transitions'] = json_encode($imageTransitions);
+                    }
+
+                    // Create image order mapping for Universal Command
+                    $imageOrderMapping = $request->input('image_order_mapping');
+                    $imageOrders = $request->input('image_orders');
+
+                    // Create mapping from image_orders if no mapping provided
+                    if (!$imageOrderMapping && $imageOrders && is_array($imageOrders)) {
+                        Log::info('🔄 Creating image order mapping from image_orders', [
+                            'image_orders' => $imageOrders
+                        ]);
+
+                        // Create mapping: originalIndex => orderValue
+                        $orderMapping = [];
+                        foreach ($imageOrders as $originalIndex => $orderValue) {
+                            // Force string key to create associative array
+                            $orderMapping[(string)$originalIndex] = intval($orderValue);
+                        }
+                        // Force JSON to be object by casting to object
+                        $imageOrderMapping = json_encode((object)$orderMapping);
+
+                        Log::info('🔄 Created image order mapping', [
+                            'image_orders' => $imageOrders,
+                            'order_mapping_object' => $orderMapping,
+                            'order_mapping_keys' => array_keys($orderMapping),
+                            'order_mapping_values' => array_values($orderMapping),
+                            'mapping_json' => $imageOrderMapping,
+                            'mapping_json_decoded' => json_decode($imageOrderMapping, true)
+                        ]);
+                    }
+
+                    if ($imageOrderMapping) {
+                        $noneParams['--image-order-mapping'] = $imageOrderMapping;
+                        Log::info('🔄 Added image order mapping to parameters', [
+                            'mapping' => $imageOrderMapping
+                        ]);
+                    }
+
+                    Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Final image parameter', [
+                        'images_parameter' => $noneParams['--images'],
+                        'total_images' => count($imagePaths)
+                    ]);
+                } else {
+                    Log::warning('🔥🔥🔥 VIDEO SERVICE DEBUG: No image files found!', [
+                        'media_type' => $request->media_type,
+                        'all_files' => array_keys($request->allFiles())
+                    ]);
+                }
+            } elseif ($request->media_type === 'mixed') {
+                // Handle mixed media (images + videos)
+                Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Processing mixed media', [
+                    'has_mixed_images' => $request->hasFile('mixed_images'),
+                    'has_mixed_videos' => $request->hasFile('mixed_videos'),
+                    'mixed_mode' => $request->input('mixed_mode', 'sequence')
+                ]);
+
+                $allMediaPaths = [];
+
+                // Process mixed images
+                if ($request->hasFile('mixed_images')) {
+                    $imageFiles = $request->file('mixed_images');
+                    foreach ($imageFiles as $index => $image) {
+                        $imagePath = $image->store("temp/mixed_images", 'local');
+                        $allMediaPaths[] = storage_path("app/{$imagePath}");
+                    }
+                    Log::info('🔥🔥🔥 Processed mixed images', ['count' => count($imageFiles)]);
+                }
+
+                // Process mixed videos
+                if ($request->hasFile('mixed_videos')) {
+                    $videoFiles = $request->file('mixed_videos');
+                    foreach ($videoFiles as $index => $video) {
+                        $videoPath = $video->store("temp/mixed_videos", 'local');
+                        $allMediaPaths[] = storage_path("app/{$videoPath}");
+                    }
+                    Log::info('🔥🔥🔥 Processed mixed videos', ['count' => count($videoFiles)]);
+                }
+
+                if (!empty($allMediaPaths)) {
+                    // For mixed media, we'll use the images parameter to pass all media files
+                    $noneParams['--images'] = implode(',', $allMediaPaths);
+                    $noneParams['--slide-duration'] = $request->input('mixed_image_duration', 3);
+                    $noneParams['--slide-transition'] = $request->input('mixed_image_transition', 'fade');
+
+                    // Add mixed media specific parameters
+                    $noneParams['--mixed-mode'] = $request->input('mixed_mode', 'sequence');
+                    $noneParams['--sequence-strategy'] = $request->input('sequence_strategy', 'even_distribution');
+                    $noneParams['--image-display-duration'] = $request->input('image_display_duration', 2);
+                    $noneParams['--image-distribution-mode'] = $request->input('image_distribution_mode', 'auto_even');
+
+                    // Add custom timing if specified
+                    if ($request->input('image_distribution_mode') === 'custom_timing' && $request->has('image_timings')) {
+                        $noneParams['--image-timings'] = json_encode($request->input('image_timings'));
+                    }
+
+                    Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Mixed media parameters', [
+                        'total_media_files' => count($allMediaPaths),
+                        'media_paths_preview' => array_slice($allMediaPaths, 0, 3),
+                        'mixed_mode' => $noneParams['--mixed-mode'],
+                        'sequence_strategy' => $noneParams['--sequence-strategy'],
+                        'image_display_duration' => $noneParams['--image-display-duration'],
+                        'image_distribution_mode' => $noneParams['--image-distribution-mode']
+                    ]);
                 }
             } elseif ($request->hasFile('product_video') || $request->hasFile('background_video')) {
                 $videoFile = $request->file('product_video') ?: $request->file('background_video');
@@ -532,9 +1019,28 @@ class VideoGenerationService
                 if ($request->subtitle_color) {
                     $noneParams['--subtitle-color'] = $request->subtitle_color;
                 }
+                if ($request->subtitle_background) {
+                    $noneParams['--subtitle-background'] = $request->subtitle_background;
+                }
+                if ($request->subtitle_font) {
+                    $noneParams['--subtitle-font'] = $request->subtitle_font;
+                }
             }
 
-            return array_merge($baseParams, $noneParams);
+            $finalParams = array_merge($baseParams, $noneParams);
+
+            // 🔥 DEBUG: Log final parameters for none platform
+            Log::info('🔥🔥🔥 VIDEO SERVICE DEBUG: Final parameters for none platform', [
+                'base_params' => $baseParams,
+                'none_params' => $noneParams,
+                'final_params' => $finalParams,
+                'has_images_param' => isset($finalParams['--images']),
+                'images_param_preview' => isset($finalParams['--images']) ? substr($finalParams['--images'], 0, 100) . '...' : 'NOT SET',
+                'slide_duration' => $finalParams['--slide-duration'] ?? 'NOT SET',
+                'slide_transition' => $finalParams['--slide-transition'] ?? 'NOT SET'
+            ]);
+
+            return $finalParams;
         } elseif ($platform === 'tiktok') {
             $tiktokParams = [
                 '--voice' => $request->voice,
@@ -575,8 +1081,8 @@ class VideoGenerationService
 
             // Handle media files based on type
             $mediaType = $request->input('media_type', 'images');
-            $hasVideo = $request->hasFile('product_video') || $request->hasFile('background_video');
-            $hasImages = $request->hasFile('product_images') || $request->hasFile('images') || $request->hasFile('inputs.images');
+            $hasVideo = $request->hasFile('product_video') || $request->hasFile('background_video') || $request->hasFile('mixed_videos');
+            $hasImages = $request->hasFile('product_images') || $request->hasFile('images') || $request->hasFile('inputs.images') || $request->hasFile('mixed_images');
 
             // Log media type detection
             Log::info('TikTok media type detection', [
@@ -586,11 +1092,13 @@ class VideoGenerationService
                 'video_files' => [
                     'product_video' => $request->hasFile('product_video'),
                     'background_video' => $request->hasFile('background_video'),
+                    'mixed_videos' => $request->hasFile('mixed_videos'),
                 ],
                 'image_files' => [
                     'product_images' => $request->hasFile('product_images'),
                     'images' => $request->hasFile('images'),
                     'inputs.images' => $request->hasFile('inputs.images'),
+                    'mixed_images' => $request->hasFile('mixed_images'),
                 ]
             ]);
 
@@ -747,8 +1255,9 @@ class VideoGenerationService
             }
 
             // Handle channel settings (optional)
-            if ($request->channel_id) {
-                $tiktokParams['--channel-id'] = $request->channel_id;
+            $tiktokChannelId = $request->tiktok_channel_id ?: $request->channel_id;
+            if ($tiktokChannelId) {
+                $tiktokParams['--channel-id'] = $tiktokChannelId;
                 $tiktokParams['--schedule-post'] = $request->boolean('schedule_post');
                 if ($request->boolean('schedule_post')) {
                     $tiktokParams['--scheduled-date'] = $request->scheduled_date;
@@ -762,10 +1271,9 @@ class VideoGenerationService
             return array_merge($baseParams, $tiktokParams);
         } elseif ($platform === 'youtube') {
             $youtubeParams = [
-                '--video-content-type' => $request->video_content_type,
+                // Map UI content type to console command's expected option
+                '--media-type' => $request->video_content_type ?: ($request->media_type ?: 'images'),
                 '--image-duration' => $request->image_duration ?: 3,
-                '--video-loop' => $request->boolean('video_loop'),
-                '--remove-video-audio' => $request->boolean('remove_video_audio'),
             ];
 
             // Handle audio source
@@ -787,8 +1295,8 @@ class VideoGenerationService
                 }
             }
 
-            // Handle video content
-            if ($request->video_content_type === 'images') {
+            // Handle video content - check media_type instead of video_content_type
+            if ($request->media_type === 'images' || $request->video_content_type === 'images') {
                 // Check for images from different sources (template vs direct upload)
                 $imageFiles = null;
 
@@ -807,6 +1315,21 @@ class VideoGenerationService
                         $imagePaths[] = storage_path("app/{$imagePath}");
                     }
                     $youtubeParams['--images'] = implode(',', $imagePaths);
+
+                    Log::info('🔥🔥🔥 YOUTUBE DEBUG: Images processed for command', [
+                        'images_count' => count($imageFiles),
+                        'image_paths' => $imagePaths,
+                        'media_type' => $request->media_type,
+                        'video_content_type' => $request->video_content_type
+                    ]);
+                } else {
+                    Log::warning('🔥🔥🔥 YOUTUBE DEBUG: No image files found', [
+                        'media_type' => $request->media_type,
+                        'video_content_type' => $request->video_content_type,
+                        'has_images' => $request->hasFile('images'),
+                        'has_product_images' => $request->hasFile('product_images'),
+                        'has_inputs_images' => $request->hasFile('inputs.images')
+                    ]);
                 }
             } elseif ($request->hasFile('background_video') || $request->hasFile('product_video')) {
                 $videoFile = $request->file('background_video') ?: $request->file('product_video');
@@ -849,17 +1372,46 @@ class VideoGenerationService
                 }
             }
 
-            // Handle channel settings (optional)
-            if ($request->channel_id) {
-                $youtubeParams['--channel-id'] = $request->channel_id;
-                $youtubeParams['--schedule-post'] = $request->boolean('schedule_post');
-                if ($request->boolean('schedule_post')) {
-                    $youtubeParams['--scheduled-date'] = $request->scheduled_date;
-                    $youtubeParams['--scheduled-time'] = $request->scheduled_time;
+            // Handle channel settings and publishing options
+            $youtubeChannelId = $request->youtube_channel_id ?: $request->channel_id;
+            if ($youtubeChannelId) {
+                $youtubeParams['--channel-id'] = $youtubeChannelId;
+
+                // Publishing mode handling
+                $publishMode = $request->input('youtube_publish_mode', 'draft');
+
+                switch ($publishMode) {
+                    case 'auto':
+                        $youtubeParams['--auto-publish'] = 'true';
+                        $youtubeParams['--schedule-post'] = 'false';
+                        break;
+                    case 'schedule':
+                        $youtubeParams['--auto-publish'] = 'false';
+                        $youtubeParams['--schedule-post'] = 'true';
+                        $youtubeParams['--scheduled-date'] = $request->youtube_scheduled_date;
+                        $youtubeParams['--scheduled-time'] = $request->youtube_scheduled_time;
+                        break;
+                    case 'draft':
+                    default:
+                        $youtubeParams['--auto-publish'] = 'false';
+                        $youtubeParams['--schedule-post'] = 'false';
+                        break;
                 }
-                $youtubeParams['--post-title'] = $request->post_title;
-                $youtubeParams['--post-description'] = $request->post_description;
-                $youtubeParams['--post-tags'] = $request->post_tags;
+
+                // Video metadata
+                $youtubeParams['--post-title'] = $request->video_title ?: $request->post_title;
+                $youtubeParams['--post-description'] = $request->video_description ?: $request->post_description;
+                $youtubeParams['--post-tags'] = $request->youtube_tags ?: $request->post_tags;
+                $youtubeParams['--post-privacy'] = $request->youtube_privacy ?: 'private';
+
+                Log::info('🔥🔥🔥 YOUTUBE DEBUG: Channel settings configured', [
+                    'channel_id' => $youtubeChannelId,
+                    'publish_mode' => $publishMode,
+                    'auto_publish' => $youtubeParams['--auto-publish'],
+                    'schedule_post' => $youtubeParams['--schedule-post'],
+                    'video_title' => $request->video_title,
+                    'video_description' => $request->video_description
+                ]);
             }
 
             return array_merge($baseParams, $youtubeParams);
@@ -1053,10 +1605,8 @@ class VideoGenerationService
             return $params;
         } else { // youtube
             $params = array_merge($baseParams, [
-                '--video-content-type' => $videoData['video_content_type'],
+                '--media-type' => $videoData['video_content_type'] ?? ($request->media_type ?: 'images'),
                 '--image-duration' => $request->image_duration ?: 3,
-                '--video-loop' => $request->boolean('video_loop'),
-                '--remove-video-audio' => $request->boolean('remove_video_audio'),
             ]);
 
             // Handle audio
@@ -1276,5 +1826,194 @@ class VideoGenerationService
         $baseName = $this->generateDescriptiveName($platform, $request);
 
         return "{$baseName}_batch_{$date}_{$time}_{$batchSequence}_{$videoSequence}";
+    }
+
+    /**
+     * Apply image order based on user input
+     */
+    private function applyImageOrder($imagePaths, $request)
+    {
+        // Check if image order mapping is provided
+        $orderMapping = $request->input('image_order_mapping');
+        $imageOrders = $request->input('image_orders');
+
+        Log::info('🔄 VIDEO GEN: Input data received', [
+            'has_image_order_mapping' => !empty($orderMapping),
+            'has_image_orders' => !empty($imageOrders),
+            'image_order_mapping' => $orderMapping,
+            'image_orders' => $imageOrders
+        ]);
+
+        // ALWAYS prioritize image_order_mapping over image_orders
+        if (!$orderMapping && !$imageOrders) {
+            // No custom order specified, return original order
+            Log::info('🔄 No image order specified, using original order', [
+                'image_count' => count($imagePaths),
+                'image_order_mapping' => $orderMapping,
+                'image_orders' => $imageOrders
+            ]);
+            return $imagePaths;
+        }
+
+        // If we have image_orders array AND no image_order_mapping, convert it to mapping
+        if (!$orderMapping && $imageOrders && is_array($imageOrders)) {
+            Log::info('🔄 Converting image_orders array to mapping', [
+                'image_orders' => $imageOrders,
+                'image_count' => count($imagePaths)
+            ]);
+
+            // Create array of [originalIndex, orderValue] pairs
+            $orderPairs = [];
+            foreach ($imageOrders as $originalIndex => $orderValue) {
+                $orderPairs[] = [
+                    'originalIndex' => $originalIndex,
+                    'orderValue' => intval($orderValue)
+                ];
+            }
+
+            // Sort by order value (smaller order value = earlier position)
+            usort($orderPairs, function($a, $b) {
+                return $a['orderValue'] - $b['orderValue'];
+            });
+
+            // Create mapping: originalIndex => orderValue (NOT position!)
+            $orderMapping = [];
+            foreach ($imageOrders as $originalIndex => $orderValue) {
+                // Force string key to create associative array
+                $orderMapping[(string)$originalIndex] = intval($orderValue);
+            }
+            // Force JSON to be object by casting to object
+            $orderMapping = json_encode((object)$orderMapping);
+
+            Log::info('🔄 Created order mapping from image_orders', [
+                'original_image_orders' => $imageOrders,
+                'order_pairs_sorted' => $orderPairs,
+                'created_mapping' => $orderMapping
+            ]);
+        }
+
+        if (!$orderMapping) {
+            // Still no valid order mapping
+            return $imagePaths;
+        }
+
+        try {
+            $orderMap = json_decode($orderMapping, true);
+
+            if (!is_array($orderMap)) {
+                Log::warning('Invalid image order mapping format', ['mapping' => $orderMapping]);
+                return $imagePaths;
+            }
+
+            // Create new array with reordered images
+            $reorderedPaths = [];
+            $originalCount = count($imagePaths);
+
+            // Convert order value mapping to position mapping
+            // orderMap now contains: originalIndex => orderValue
+            $orderPairs = [];
+            foreach ($orderMap as $originalIndex => $orderValue) {
+                if (isset($imagePaths[$originalIndex])) {
+                    $orderPairs[] = [
+                        'originalIndex' => $originalIndex,
+                        'orderValue' => intval($orderValue),
+                        'imagePath' => $imagePaths[$originalIndex]
+                    ];
+                }
+            }
+
+            // Sort by order value (smaller order value = earlier position)
+            usort($orderPairs, function($a, $b) {
+                return $a['orderValue'] - $b['orderValue'];
+            });
+
+            // Create final reordered array
+            $reorderedPaths = array_map(function($pair) {
+                return $pair['imagePath'];
+            }, $orderPairs);
+
+            // Add any missing images that weren't in the mapping
+            for ($i = 0; $i < $originalCount; $i++) {
+                if (!in_array($imagePaths[$i], $reorderedPaths)) {
+                    $reorderedPaths[] = $imagePaths[$i];
+                }
+            }
+
+            Log::info('🔄 Applied image reordering', [
+                'original_count' => $originalCount,
+                'reordered_count' => count($reorderedPaths),
+                'order_mapping' => $orderMap,
+                'original_paths' => array_map('basename', $imagePaths),
+                'reordered_paths' => array_map('basename', $reorderedPaths)
+            ]);
+
+            return $reorderedPaths;
+
+        } catch (\Exception $e) {
+            Log::error('Failed to apply image order', [
+                'error' => $e->getMessage(),
+                'mapping' => $orderMapping
+            ]);
+
+            // Return original order on error
+            return $imagePaths;
+        }
+    }
+
+    /**
+     * Reorder array based on the same order mapping used for images
+     */
+    private function reorderArrayByMapping($array, $orderMapping)
+    {
+        if (empty($array) || !is_array($array) || empty($orderMapping)) {
+            return $array;
+        }
+
+        try {
+            $orderMap = is_string($orderMapping) ? json_decode($orderMapping, true) : $orderMapping;
+
+            if (!is_array($orderMap)) {
+                return $array;
+            }
+
+            // Convert order value mapping to position mapping
+            $orderPairs = [];
+            foreach ($orderMap as $originalIndex => $orderValue) {
+                if (isset($array[$originalIndex])) {
+                    $orderPairs[] = [
+                        'originalIndex' => $originalIndex,
+                        'orderValue' => intval($orderValue),
+                        'arrayValue' => $array[$originalIndex]
+                    ];
+                }
+            }
+
+            // Sort by order value (smaller order value = earlier position)
+            usort($orderPairs, function($a, $b) {
+                return $a['orderValue'] - $b['orderValue'];
+            });
+
+            // Create final reordered array
+            $reorderedArray = array_map(function($pair) {
+                return $pair['arrayValue'];
+            }, $orderPairs);
+
+            // Add any missing values that weren't in the mapping
+            for ($i = 0; $i < count($array); $i++) {
+                if (!in_array($array[$i], $reorderedArray)) {
+                    $reorderedArray[] = $array[$i];
+                }
+            }
+
+            return $reorderedArray;
+
+        } catch (\Exception $e) {
+            Log::error('Failed to reorder array by mapping', [
+                'error' => $e->getMessage(),
+                'array_count' => count($array),
+                'mapping' => $orderMapping
+            ]);
+            return $array;
+        }
     }
 }

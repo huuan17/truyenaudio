@@ -1097,6 +1097,54 @@ class StoryController extends Controller
     }
 
     /**
+     * Execute smart crawl - only crawl missing chapters
+     */
+    public function executeSmartCrawl(Request $request, Story $story)
+    {
+        try {
+            // Validate request
+            $request->validate([
+                'confirm' => 'required'
+            ]);
+
+            // Check if story is already being crawled
+            if ($this->hasActiveCrawlJob($story)) {
+                return back()->with('error', 'Truyện đang được crawl. Vui lòng chờ hoàn thành.');
+            }
+
+            // Get existing chapters
+            $existingChapters = $story->chapters()->pluck('chapter_number')->toArray();
+
+            // Calculate missing chapters
+            $allChapters = range($story->start_chapter, $story->end_chapter);
+            $missingChapters = array_diff($allChapters, $existingChapters);
+
+            if (empty($missingChapters)) {
+                return back()->with('info', 'Tất cả chương đã được crawl. Không có chương nào cần crawl thêm.');
+            }
+
+            // Update story status to crawling
+            $story->update([
+                'crawl_status' => config('constants.CRAWL_STATUS.VALUES.CRAWLING')
+            ]);
+
+            // Dispatch smart crawl job
+            \App\Jobs\SmartCrawlStoryJob::dispatch($story->id)
+                ->onQueue('crawl');
+
+            \Log::info("Smart crawl job dispatched for story ID: {$story->id}, missing chapters: " . implode(', ', $missingChapters));
+
+            return redirect()->route('admin.stories.index')
+                ->with('success', "Smart crawl đã được khởi động cho truyện '{$story->title}'. Sẽ crawl " . count($missingChapters) . " chương còn thiếu.");
+
+        } catch (\Exception $e) {
+            \Log::error('Error executing smart crawl: ' . $e->getMessage());
+
+            return back()->with('error', 'Lỗi khi thực hiện smart crawl: ' . $e->getMessage());
+        }
+    }
+
+    /**
      * Show smart crawl information page
      */
     private function showSmartCrawlInfo(Story $story)

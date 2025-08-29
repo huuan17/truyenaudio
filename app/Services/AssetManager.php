@@ -278,7 +278,11 @@ class AssetManager
             case str_contains($route, 'video-templates'):
                 self::addVideoGeneratorAssets();
                 break;
-                
+
+            case str_contains($route, 'video-publishing'):
+                self::addVideoPublishingAssets();
+                break;
+
             case str_contains($route, 'tts-monitor'):
                 self::addTTSMonitorAssets();
                 break;
@@ -396,6 +400,190 @@ class AssetManager
                 }
             }, 30000); // Refresh every 30 seconds
         ', 15);
+    }
+
+    /**
+     * Add video publishing specific assets
+     */
+    protected static function addVideoPublishingAssets()
+    {
+        // Add video publishing CSS
+        self::addInlineCSS('
+            /* Video Publishing Specific Styles */
+            .publishing-card {
+                transition: all 0.3s ease;
+                border: 1px solid #e3e6f0;
+            }
+            .publishing-card:hover {
+                box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+                transform: translateY(-2px);
+            }
+            .status-badge {
+                font-size: 0.75rem;
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.35rem;
+            }
+            .platform-icon {
+                width: 24px;
+                height: 24px;
+                border-radius: 4px;
+            }
+            .scheduled-time {
+                font-size: 0.875rem;
+                color: #6c757d;
+            }
+            .action-buttons .btn {
+                margin-right: 0.25rem;
+                margin-bottom: 0.25rem;
+            }
+            .filter-section {
+                background: #f8f9fc;
+                border-radius: 0.35rem;
+                padding: 1rem;
+                margin-bottom: 1.5rem;
+            }
+            .stats-card {
+                border-left: 0.25rem solid;
+                transition: all 0.3s ease;
+            }
+            .stats-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            }
+        ');
+
+        self::addInlineJS('
+            // Video Publishing specific JavaScript
+            window.VideoPublishing = {
+                init: function() {
+                    this.initFilters();
+                    this.initBulkActions();
+                    this.initStatusUpdates();
+                    this.initScheduleModal();
+                },
+                initFilters: function() {
+                    // Platform filter
+                    $("#platform-filter").on("change", function() {
+                        const platform = $(this).val();
+                        const url = new URL(window.location);
+                        if (platform) {
+                            url.searchParams.set("platform", platform);
+                        } else {
+                            url.searchParams.delete("platform");
+                        }
+                        window.location.href = url.toString();
+                    });
+
+                    // Status filter
+                    $("#status-filter").on("change", function() {
+                        const status = $(this).val();
+                        const url = new URL(window.location);
+                        if (status) {
+                            url.searchParams.set("status", status);
+                        } else {
+                            url.searchParams.delete("status");
+                        }
+                        window.location.href = url.toString();
+                    });
+                },
+                initBulkActions: function() {
+                    // Select all checkbox
+                    $("#select-all").on("change", function() {
+                        $(".publishing-checkbox").prop("checked", this.checked);
+                        VideoPublishing.updateBulkActionButton();
+                    });
+
+                    // Individual checkboxes
+                    $(document).on("change", ".publishing-checkbox", function() {
+                        VideoPublishing.updateBulkActionButton();
+                    });
+
+                    // Bulk action button
+                    $("#bulk-action-btn").on("click", function() {
+                        const selected = $(".publishing-checkbox:checked").map(function() {
+                            return $(this).val();
+                        }).get();
+
+                        if (selected.length === 0) {
+                            alert("Vui lòng chọn ít nhất một video để thực hiện hành động.");
+                            return;
+                        }
+
+                        const action = $("#bulk-action-select").val();
+                        if (!action) {
+                            alert("Vui lòng chọn hành động cần thực hiện.");
+                            return;
+                        }
+
+                        VideoPublishing.performBulkAction(action, selected);
+                    });
+                },
+                updateBulkActionButton: function() {
+                    const selectedCount = $(".publishing-checkbox:checked").length;
+                    const button = $("#bulk-action-btn");
+
+                    if (selectedCount > 0) {
+                        button.prop("disabled", false).text(`Thực hiện (${selectedCount})`);
+                    } else {
+                        button.prop("disabled", true).text("Thực hiện");
+                    }
+                },
+                performBulkAction: function(action, ids) {
+                    if (!confirm(`Bạn có chắc chắn muốn ${action} ${ids.length} video đã chọn?`)) {
+                        return;
+                    }
+
+                    // Show loading
+                    const button = $("#bulk-action-btn");
+                    const originalText = button.text();
+                    button.prop("disabled", true).html("<i class=\"fas fa-spinner fa-spin\"></i> Đang xử lý...");
+
+                    // Perform action via AJAX
+                    $.ajax({
+                        url: "' . route('admin.video-publishing.bulk-action') . '",
+                        method: "POST",
+                        data: {
+                            action: action,
+                            ids: ids,
+                            _token: $("meta[name=\"csrf-token\"]").attr("content")
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                location.reload();
+                            } else {
+                                alert("Có lỗi xảy ra: " + (response.message || "Unknown error"));
+                            }
+                        },
+                        error: function() {
+                            alert("Có lỗi xảy ra khi thực hiện hành động.");
+                        },
+                        complete: function() {
+                            button.prop("disabled", false).text(originalText);
+                        }
+                    });
+                },
+                initStatusUpdates: function() {
+                    // Auto-refresh for scheduled page
+                    if (window.location.pathname.includes("scheduled")) {
+                        setInterval(function() {
+                            location.reload();
+                        }, 60000); // Refresh every minute
+                    }
+                },
+                initScheduleModal: function() {
+                    // Schedule modal handlers
+                    $(".schedule-btn").on("click", function() {
+                        const publishingId = $(this).data("id");
+                        $("#schedule-modal").data("publishing-id", publishingId).modal("show");
+                    });
+                }
+            };
+
+            // Initialize when document is ready
+            $(document).ready(function() {
+                VideoPublishing.init();
+            });
+        ', 10);
     }
 
     /**

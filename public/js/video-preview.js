@@ -37,6 +37,13 @@ class VideoPreview {
      * Create preview container in the UI
      */
     createPreviewContainer() {
+        // Prevent duplicate containers on pages that initialize multiple previews
+        const existing = document.getElementById('video-preview-container');
+        if (existing) {
+            console.warn('VideoPreview: container already exists, skipping duplicate creation');
+            this.previewContainer = existing;
+            return;
+        }
         // Find container to insert preview
         const container = document.querySelector(this.options.containerSelector);
         if (!container) {
@@ -47,8 +54,8 @@ class VideoPreview {
         // Get template resolution info
         const templateInfo = this.getTemplateInfo();
 
-        // Determine layout based on form type
-        const isFullWidth = this.options.formType === 'generator' || !container.classList.contains('col-lg-4');
+        // Determine layout based on container width only (avoid forcing full width inside sidebar)
+        const isFullWidth = !container.classList.contains('col-lg-4');
         const cardClass = isFullWidth ? 'col-lg-6 col-md-12' : '';
         const videoHeight = isFullWidth ? '400px' : '300px';
 
@@ -100,21 +107,16 @@ class VideoPreview {
             </div>
         `;
 
-        // Insert preview container
-        if (isFullWidth) {
-            // For full-width layouts, create a row and insert as column
-            const existingRow = container.querySelector('.row');
-            if (existingRow) {
-                existingRow.insertAdjacentHTML('beforeend', previewHtml);
-            } else {
-                container.insertAdjacentHTML(this.options.insertPosition, `<div class="row">${previewHtml}</div>`);
-            }
-        } else {
-            // For sidebar layouts, insert directly
-            container.insertAdjacentHTML(this.options.insertPosition, previewHtml);
-        }
+        // Insert preview container ALWAYS after the settings card to avoid overlaying controls
+        // Find platform-section card (closest card that contains platform tabs) and insert after it
+        const platformCard = document.querySelector('#platformTabs')?.closest('.card') || container;
+        platformCard.insertAdjacentHTML('afterend', previewHtml);
 
         this.previewContainer = document.getElementById('video-preview-container');
+        if (this.previewContainer) {
+            this.previewContainer.style.position = 'relative';
+            this.previewContainer.style.zIndex = '1';
+        }
     }
     
     /**
@@ -177,6 +179,25 @@ class VideoPreview {
             });
         });
 
+        // Subtitle options events (color, position, background, size, font)
+        const subtitleOptionSelectors = [
+            'select[name*="subtitle_color"], select[id*="subtitle_color"]',
+            'select[name*="subtitle_position"], select[id*="subtitle_position"]',
+            'select[name*="subtitle_background"], select[id*="subtitle_background"]',
+            'select[name*="subtitle_size"], select[id*="subtitle_size"]',
+            'select[name*="subtitle_font"], select[id*="subtitle_font"]'
+        ];
+
+        subtitleOptionSelectors.forEach(selector => {
+            const selects = document.querySelectorAll(selector);
+            selects.forEach(select => {
+                select.addEventListener('change', (e) => {
+                    console.log('🎨 Subtitle option changed:', e.target.name, '=', e.target.value);
+                    this.handleSubtitleOptionsChange(e);
+                });
+            });
+        });
+
         // TTS text events - enhanced selectors
         const ttsSelectors = [
             'textarea[name*="text"], textarea[name*="script"]',
@@ -223,7 +244,7 @@ class VideoPreview {
      * Handle audio upload change
      */
     async handleAudioChange(event) {
-        const file = event.target.files[0];
+        const file = event.target.files && event.target.files[0];
         if (file) {
             // Upload file to server first
             const uploadedFiles = await this.uploadFiles([file], 'audio');
@@ -243,11 +264,20 @@ class VideoPreview {
         console.log('Subtitle change detected:', text);
 
         if (text) {
+            // Get all subtitle options from form
+            const subtitleOptions = this.getSubtitleOptions();
+
             this.components.subtitle = {
                 text: text,
-                size: 24
+                size: subtitleOptions.size || 'medium',
+                color: subtitleOptions.color || 'white',
+                position: subtitleOptions.position || 'bottom',
+                background: subtitleOptions.background || 'black',
+                font: subtitleOptions.font || 'Arial'
             };
-            console.log('Subtitle component set:', this.components.subtitle);
+
+            console.log('🎨 Final subtitle component:', this.components.subtitle);
+            console.log('Subtitle component set with options:', this.components.subtitle);
         } else {
             this.components.subtitle = null;
             console.log('Subtitle component cleared');
@@ -259,6 +289,72 @@ class VideoPreview {
             console.log('Generating preview with subtitle:', this.components.subtitle);
             this.generatePreview();
         }, 1000);
+    }
+
+    /**
+     * Get subtitle options from form
+     */
+    getSubtitleOptions() {
+        const options = {};
+
+        // Get subtitle options directly by name/id
+        const elements = {
+            size: document.querySelector('select[name="subtitle_size"], select[id="subtitle_size"]'),
+            color: document.querySelector('select[name="subtitle_color"], select[id="subtitle_color"]'),
+            position: document.querySelector('select[name="subtitle_position"], select[id="subtitle_position"]'),
+            background: document.querySelector('select[name="subtitle_background"], select[id="subtitle_background"]'),
+            font: document.querySelector('select[name="subtitle_font"], select[id="subtitle_font"]')
+        };
+
+        Object.keys(elements).forEach(key => {
+            const element = elements[key];
+            if (element && element.value) {
+                options[key] = element.value;
+            }
+        });
+
+        console.log('🎨 Subtitle options from form:', options);
+        console.log('🎨 Form elements found:', {
+            size: !!elements.size,
+            color: !!elements.color,
+            position: !!elements.position,
+            background: !!elements.background,
+            font: !!elements.font
+        });
+
+        console.log('🎨 Subtitle options from form:', options);
+        return options;
+    }
+
+    /**
+     * Handle subtitle options change (color, position, background, etc.)
+     */
+    handleSubtitleOptionsChange(event) {
+        console.log('🎨 Subtitle options changed:', event.target.name, '=', event.target.value);
+
+        // If we have subtitle text, regenerate preview with new options
+        if (this.components.subtitle && this.components.subtitle.text) {
+            const subtitleOptions = this.getSubtitleOptions();
+
+            // Update subtitle component with new options
+            this.components.subtitle = {
+                ...this.components.subtitle,
+                size: subtitleOptions.size || this.components.subtitle.size,
+                color: subtitleOptions.color || this.components.subtitle.color,
+                position: subtitleOptions.position || this.components.subtitle.position,
+                background: subtitleOptions.background || this.components.subtitle.background,
+                font: subtitleOptions.font || this.components.subtitle.font
+            };
+
+            console.log('🎨 Updated subtitle component:', this.components.subtitle);
+
+            // Debounce preview generation
+            clearTimeout(this.subtitleOptionsTimeout);
+            this.subtitleOptionsTimeout = setTimeout(() => {
+                console.log('🎨 Generating preview with new subtitle options');
+                this.generatePreview();
+            }, 500);
+        }
     }
     
     /**
@@ -333,23 +429,57 @@ class VideoPreview {
                 await this.deletePreview(this.currentPreviewId);
             }
             
+            // Get image order data from form
+            const imageOrderMapping = document.getElementById('image_order_mapping');
+            const imageOrders = document.querySelectorAll('input[name="image_orders[]"]');
+
+            console.log('🔄 PREVIEW: Checking order data', {
+                hasImageOrderMapping: !!imageOrderMapping,
+                imageOrderMappingValue: imageOrderMapping ? imageOrderMapping.value : null,
+                imageOrdersCount: imageOrders.length,
+                imageOrdersValues: Array.from(imageOrders).map(input => input.value)
+            });
+
+            const requestData = {
+                components: this.components
+            };
+
+            // Add image order data if available
+            if (imageOrderMapping && imageOrderMapping.value) {
+                requestData.image_order_mapping = imageOrderMapping.value;
+                console.log('🔄 PREVIEW: Using image_order_mapping', imageOrderMapping.value);
+            } else if (imageOrders.length > 0) {
+                // Only use image_orders if they are not default values
+                const orderValues = Array.from(imageOrders).map(input => input.value);
+                const isDefaultOrder = orderValues.every((val, index) => val === String(index + 1));
+
+                if (!isDefaultOrder) {
+                    requestData.image_orders = orderValues;
+                    console.log('🔄 PREVIEW: Using image_orders (non-default)', orderValues);
+                } else {
+                    console.log('🔄 PREVIEW: Skipping default image_orders', orderValues);
+                }
+            }
+
+            console.log('🔄 PREVIEW: Sending request with image order', requestData);
+
             const response = await fetch('/admin/video-preview/generate', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                 },
-                body: JSON.stringify({
-                    components: this.components
-                })
+                body: JSON.stringify(requestData)
             });
             
             const result = await response.json();
             
             if (result.success) {
                 this.currentPreviewId = result.preview_id;
+                console.log('🎥 Preview generated successfully:', result.preview_url);
                 this.showVideo(result.preview_url);
             } else {
+                console.log('❌ Preview generation failed:', result.error);
                 this.showError('Lỗi tạo preview: ' + result.error);
             }
             
@@ -395,11 +525,38 @@ class VideoPreview {
      */
     showVideo(videoUrl) {
         const video = document.querySelector('#preview-video video');
-        video.src = videoUrl;
-        
+
+        // Force reload by adding timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const urlWithTimestamp = videoUrl + (videoUrl.includes('?') ? '&' : '?') + 't=' + timestamp;
+
+        console.log('🎥 Loading video with cache-busting URL:', urlWithTimestamp);
+
+        // Clear current source first
+        video.src = '';
+        video.load();
+
+        // Set new source with timestamp
+        video.src = urlWithTimestamp;
+
         document.getElementById('preview-status').style.display = 'none';
         document.getElementById('preview-loading').style.display = 'none';
         document.getElementById('preview-video').style.display = 'block';
+
+        video.load();
+
+        // Add visual feedback when video loads
+        video.addEventListener('loadeddata', function() {
+            console.log('🎥 Video loaded successfully with new content');
+            // Flash border to indicate new video
+            const videoContainer = document.getElementById('preview-video');
+            videoContainer.style.border = '3px solid #28a745';
+            setTimeout(() => {
+                videoContainer.style.border = '';
+            }, 1000);
+        }, { once: true });
+
+        video.play().catch(e => console.log('Video autoplay prevented:', e));
     }
     
     /**

@@ -20,6 +20,10 @@
                     <input type="radio" name="audio_source" value="library">
                     <i class="fas fa-music mr-1"></i>Từ thư viện
                 </label>
+                <label class="btn btn-outline-success mr-2 mb-2">
+                    <input type="radio" name="audio_source" value="video_original">
+                    <i class="fas fa-video mr-1"></i>Âm thanh từ video gốc
+                </label>
                 <label class="btn btn-outline-success mb-2">
                     <input type="radio" name="audio_source" value="none">
                     <i class="fas fa-volume-mute mr-1"></i>Không có âm thanh
@@ -168,6 +172,98 @@
                             <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="clearSelectedAudio()">
                                 <i class="fas fa-times"></i>
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Video Original Audio Section -->
+        <div id="video-original-audio-section" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-video mr-2"></i>Âm thanh từ video gốc</h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Sử dụng âm thanh từ video gốc:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Chỉ áp dụng khi chọn loại nội dung là <strong>"Video"</strong> hoặc <strong>"Hỗn hợp"</strong></li>
+                            <li>Âm thanh sẽ được trích xuất từ video đã upload</li>
+                            <li>Có thể điều chỉnh âm lượng và áp dụng hiệu ứng</li>
+                        </ul>
+                    </div>
+
+                    <!-- Audio Processing Options -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="video_audio_volume">Âm lượng (%)</label>
+                                <input type="range" name="video_audio_volume" id="video_audio_volume"
+                                       class="form-control-range" min="0" max="200" value="100"
+                                       oninput="updateVolumeDisplay(this.value)">
+                                <small class="form-text text-muted">
+                                    Âm lượng hiện tại: <span id="volume-display">100%</span>
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="video_audio_fade">Hiệu ứng fade</label>
+                                <select name="video_audio_fade" id="video_audio_fade" class="form-control">
+                                    <option value="none">Không có</option>
+                                    <option value="fade_in">Fade in (âm thanh tăng dần)</option>
+                                    <option value="fade_out">Fade out (âm thanh giảm dần)</option>
+                                    <option value="fade_in_out" selected>Fade in + Fade out</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="video_audio_start_time">Thời gian bắt đầu (giây)</label>
+                                <input type="number" name="video_audio_start_time" id="video_audio_start_time"
+                                       class="form-control" min="0" step="0.1" value="0"
+                                       placeholder="0 = từ đầu video">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="video_audio_duration">Thời lượng sử dụng (giây)</label>
+                                <input type="number" name="video_audio_duration" id="video_audio_duration"
+                                       class="form-control" min="0" step="0.1"
+                                       placeholder="Để trống = sử dụng toàn bộ">
+                                <small class="form-text text-muted">Để trống để sử dụng toàn bộ âm thanh</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audio Enhancement Options -->
+                    <div class="form-group">
+                        <label class="form-label">Tùy chọn nâng cao</label>
+                        <div class="form-check">
+                            <input type="checkbox" name="video_audio_normalize" id="video_audio_normalize"
+                                   class="form-check-input" value="1" checked>
+                            <label class="form-check-label" for="video_audio_normalize">
+                                Chuẩn hóa âm lượng (normalize)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" name="video_audio_noise_reduction" id="video_audio_noise_reduction"
+                                   class="form-check-input" value="1">
+                            <label class="form-check-label" for="video_audio_noise_reduction">
+                                Giảm nhiễu âm thanh
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input type="checkbox" name="video_audio_loop" id="video_audio_loop"
+                                   class="form-check-input" value="1">
+                            <label class="form-check-label" for="video_audio_loop">
+                                Lặp lại âm thanh nếu video dài hơn
+                            </label>
                         </div>
                     </div>
                 </div>

@@ -46,9 +46,13 @@ class ProcessScheduledPostJob implements ShouldQueue
                 return;
             }
 
-            // Kiểm tra file video
-            if (!file_exists($this->scheduledPost->video_path)) {
-                $this->scheduledPost->markAsFailed("File video không tồn tại: {$this->scheduledPost->video_path}");
+            // Kiểm tra file video (hỗ trợ đường dẫn tương đối trong storage/app)
+            $videoPathCheck = $this->scheduledPost->video_path;
+            if (!preg_match('/^[A-Za-z]:\\\\|^\\\\\\\\|^\//', $videoPathCheck)) {
+                $videoPathCheck = storage_path('app/' . ltrim($videoPathCheck, '/\\'));
+            }
+            if (!file_exists($videoPathCheck)) {
+                $this->scheduledPost->markAsFailed("File video không tồn tại: {$this->scheduledPost->video_path} (Đã kiểm tra: {$videoPathCheck})");
                 return;
             }
 
@@ -59,11 +63,32 @@ class ProcessScheduledPostJob implements ShouldQueue
             $result = $this->uploadToChannel();
 
             if ($result['success']) {
-                $this->scheduledPost->markAsUploaded($result['post_id'] ?? null, $result['url'] ?? null);
-                Log::info("Post uploaded successfully", ['post_id' => $this->scheduledPost->id]);
+                $postId = $result['post_id'] ?? null;
+                $url = $result['url'] ?? null;
+                $this->scheduledPost->markAsUploaded($postId, $url);
+                Log::info("Post uploaded successfully", ['post_id' => $this->scheduledPost->id, 'platform_post_id' => $postId, 'url' => $url]);
+
+                // Sync back to VideoPublishing if present
+                $vpId = $this->scheduledPost->metadata['video_publishing_id'] ?? null;
+                if ($vpId) {
+                    $vp = \App\Models\VideoPublishing::find($vpId);
+                    if ($vp) {
+                        $vp->markAsPublished($postId, $url);
+                    }
+                }
             } else {
-                $this->scheduledPost->markAsFailed($result['error'] ?? 'Unknown error');
-                Log::error("Post upload failed", ['post_id' => $this->scheduledPost->id, 'error' => $result['error']]);
+                $error = $result['error'] ?? 'Unknown error';
+                $this->scheduledPost->markAsFailed($error);
+                Log::error("Post upload failed", ['post_id' => $this->scheduledPost->id, 'error' => $error]);
+
+                // Sync failure to VideoPublishing if present
+                $vpId = $this->scheduledPost->metadata['video_publishing_id'] ?? null;
+                if ($vpId) {
+                    $vp = \App\Models\VideoPublishing::find($vpId);
+                    if ($vp) {
+                        $vp->markAsFailed($error);
+                    }
+                }
             }
 
         } catch (\Exception $e) {
@@ -187,14 +212,12 @@ class ProcessScheduledPostJob implements ShouldQueue
     }
 
     /**
-     * Upload lên YouTube
+     * Upload lên YouTube (thực tế)
      */
     private function uploadToYouTube()
     {
-        // TODO: Implement actual YouTube API
-        // Hiện tại mock upload
-
         $channel = $this->scheduledPost->channel;
+        $post = $this->scheduledPost;
 
         if (!$channel->hasValidCredentials()) {
             return [
@@ -203,14 +226,39 @@ class ProcessScheduledPostJob implements ShouldQueue
             ];
         }
 
-        // Simulate API call
-        sleep(3);
+        // Strictly use DB creds for YouTube to ensure refresh_token matches client
+        $creds = $channel->api_credentials ?: [];
+        $clientId = $creds['client_id'] ?? null;
+        $clientSecret = $creds['client_secret'] ?? null;
+        $refreshToken = $creds['refresh_token'] ?? null;
+        if (!$clientId || !$clientSecret || !$refreshToken) {
+            return ['success' => false, 'error' => 'Thiếu client_id/client_secret/refresh_token trong DB cho YouTube'];
+        }
 
-        return [
-            'success' => true,
-            'post_id' => 'youtube_' . time() . '_' . $this->scheduledPost->id,
-            'url' => 'https://youtube.com/watch?v=' . strtoupper(substr(md5($this->scheduledPost->id . time()), 0, 11))
-        ];
+        $videoPath = $post->video_path;
+        // Normalize to storage path if relative stored
+        if (!str_starts_with($videoPath, DIRECTORY_SEPARATOR) && !preg_match('/^[A-Za-z]:\\\\|^\//', $videoPath)) {
+            $videoPath = storage_path('app/' . ltrim($videoPath, '/\\'));
+        }
+        if (!file_exists($videoPath)) {
+            return ['success' => false, 'error' => 'Không tìm thấy video: ' . $post->video_path . ' (Đã kiểm tra: ' . $videoPath . ')'];
+        }
+
+        // Prepare metadata
+        $title = $post->title ?: 'Video từ ' . config('app.name');
+        $description = $post->description ?: '';
+        $tags = $post->tags ?? [];
+        $privacy = $post->privacy ?: 'private';
+        $categoryId = null; // You can map $post->category to YouTube category ID if needed
+
+        if (!class_exists(\App\Services\YouTubeUploader::class)) {
+            return ['success' => false, 'error' => 'Thiếu YouTubeUploader service'];
+        }
+
+        $uploader = new \App\Services\YouTubeUploader($clientId, $clientSecret, $refreshToken);
+        $result = $uploader->upload($videoPath, $title, $description, $tags, $privacy, $categoryId);
+
+        return $result;
     }
 
     /**

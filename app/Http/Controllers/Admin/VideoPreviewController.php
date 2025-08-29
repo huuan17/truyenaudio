@@ -81,20 +81,28 @@ class VideoPreviewController extends Controller
     public function generatePreview(Request $request)
     {
         try {
+            // Set timeout for preview generation
+            set_time_limit(120); // 2 minutes for preview
             $components = $request->input('components', []);
             $previewId = uniqid('preview_');
             $tempDir = storage_path("app/temp/preview/{$previewId}");
-            
+
             // Create temp directory
             if (!File::isDirectory($tempDir)) {
                 File::makeDirectory($tempDir, 0755, true);
             }
-            
+
             Log::info('Preview generation started', [
                 'preview_id' => $previewId,
-                'components' => $components
+                'components' => $components,
+                'request_data' => $request->all()
             ]);
-            
+
+            // Apply image order if provided
+            if (isset($components['images']) && !empty($components['images'])) {
+                $components['images'] = $this->applyImageOrder($components['images'], $request);
+            }
+
             // Generate preview based on available components
             $previewPath = $this->buildPreview($components, $tempDir);
             
@@ -282,22 +290,31 @@ class VideoPreviewController extends Controller
         // Get video duration for proper timing
         $videoDuration = $this->getVideoDuration($videoPath);
 
+        // Get user subtitle options from subtitle data
+        $userOptions = [
+            'output_path' => $outputPath,
+            'font_size' => $subtitleData['size'] ?? 24,
+            'font_name' => 'Arial Unicode MS',
+            'font_color' => $subtitleData['color'] ?? 'white',
+            'outline_color' => 'black',
+            'outline_width' => 2,
+            'position' => $subtitleData['position'] ?? 'bottom',
+            'background_color' => $subtitleData['background'] ?? 'none',
+            'margin' => 100,
+            'hard_subtitle' => true
+        ];
+
+        Log::info('PREVIEW SUBTITLE: User options from request', [
+            'subtitle_data' => $subtitleData,
+            'user_options' => $userOptions
+        ]);
+
         // Use new Vietnamese subtitle service
         $result = $this->videoSubtitleService->createVideoWithVietnameseSubtitle(
             $videoPath,
             $text,
             $videoDuration,
-            [
-                'output_path' => $outputPath,
-                'font_size' => $size,
-                'font_name' => 'Arial Unicode MS',
-                'font_color' => 'white',
-                'outline_color' => 'black',
-                'outline_width' => 2,
-                'position' => 'bottom',
-                'margin' => 100,
-                'hard_subtitle' => true
-            ]
+            $userOptions
         );
 
         Log::info('PREVIEW SUBTITLE: Vietnamese subtitle result', [
@@ -430,5 +447,138 @@ class VideoPreviewController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Apply image order based on user input (same logic as VideoGenerationService)
+     */
+    private function applyImageOrder($imagePaths, $request)
+    {
+        // Check if image order mapping is provided
+        $orderMapping = $request->input('image_order_mapping');
+        $imageOrders = $request->input('image_orders');
+
+        Log::info('🔄 PREVIEW: Input data received', [
+            'has_image_order_mapping' => !empty($orderMapping),
+            'has_image_orders' => !empty($imageOrders),
+            'image_order_mapping' => $orderMapping,
+            'image_orders' => $imageOrders
+        ]);
+
+        // ALWAYS prioritize image_order_mapping over image_orders
+        if (!$orderMapping && !$imageOrders) {
+            // No custom order specified, return original order
+            Log::info('🔄 PREVIEW: No image order specified, using original order', [
+                'image_count' => count($imagePaths),
+                'image_order_mapping' => $orderMapping,
+                'image_orders' => $imageOrders
+            ]);
+            return $imagePaths;
+        }
+
+        // If we have image_orders array AND no image_order_mapping, convert it to mapping
+        if (!$orderMapping && $imageOrders && is_array($imageOrders)) {
+            Log::info('🔄 PREVIEW: Converting image_orders array to mapping', [
+                'image_orders' => $imageOrders,
+                'image_count' => count($imagePaths)
+            ]);
+
+            // Create array of [originalIndex, orderValue] pairs
+            $orderPairs = [];
+            foreach ($imageOrders as $originalIndex => $orderValue) {
+                $orderPairs[] = [
+                    'originalIndex' => $originalIndex,
+                    'orderValue' => intval($orderValue)
+                ];
+            }
+
+            // Sort by order value (smaller order value = earlier position)
+            usort($orderPairs, function($a, $b) {
+                return $a['orderValue'] - $b['orderValue'];
+            });
+
+            // Create mapping: originalIndex => orderValue (NOT position!)
+            $orderMapping = [];
+            foreach ($imageOrders as $originalIndex => $orderValue) {
+                // Force string key to create associative array
+                $orderMapping[(string)$originalIndex] = intval($orderValue);
+            }
+            // Force JSON to be object by casting to object
+            $orderMapping = json_encode((object)$orderMapping);
+
+            Log::info('🔄 PREVIEW: Created order mapping from image_orders', [
+                'original_image_orders' => $imageOrders,
+                'order_pairs_sorted' => $orderPairs,
+                'created_mapping' => $orderMapping
+            ]);
+        }
+
+        if (!$orderMapping) {
+            // Still no valid order mapping
+            return $imagePaths;
+        }
+
+        try {
+            $orderMap = json_decode($orderMapping, true);
+
+            if (!is_array($orderMap)) {
+                Log::warning('PREVIEW: Invalid image order mapping format', ['mapping' => $orderMapping]);
+                return $imagePaths;
+            }
+
+            // Create new array with reordered images
+            $reorderedPaths = [];
+            $originalCount = count($imagePaths);
+
+            // Convert order value mapping to position mapping
+            // orderMap now contains: originalIndex => orderValue
+            $orderPairs = [];
+            foreach ($orderMap as $originalIndex => $orderValue) {
+                if (isset($imagePaths[$originalIndex])) {
+                    $orderPairs[] = [
+                        'originalIndex' => $originalIndex,
+                        'orderValue' => intval($orderValue),
+                        'imagePath' => $imagePaths[$originalIndex]
+                    ];
+                }
+            }
+
+            // Sort by order value (smaller order value = earlier position)
+            usort($orderPairs, function($a, $b) {
+                return $a['orderValue'] - $b['orderValue'];
+            });
+
+            // Create final reordered array
+            $reorderedPaths = array_map(function($pair) {
+                return $pair['imagePath'];
+            }, $orderPairs);
+
+            // Add any missing images that weren't in the mapping
+            for ($i = 0; $i < $originalCount; $i++) {
+                if (!in_array($imagePaths[$i], $reorderedPaths)) {
+                    $reorderedPaths[] = $imagePaths[$i];
+                }
+            }
+
+            Log::info('🔄 PREVIEW: Applied image reordering', [
+                'original_count' => $originalCount,
+                'reordered_count' => count($reorderedPaths),
+                'order_value_mapping' => $orderMap,
+                'order_pairs_sorted' => array_map(function($pair) {
+                    return ['originalIndex' => $pair['originalIndex'], 'orderValue' => $pair['orderValue']];
+                }, $orderPairs),
+                'original_paths' => array_map('basename', $imagePaths),
+                'reordered_paths' => array_map('basename', $reorderedPaths)
+            ]);
+
+            return $reorderedPaths;
+
+        } catch (\Exception $e) {
+            Log::error('PREVIEW: Error applying image order', [
+                'error' => $e->getMessage(),
+                'order_mapping' => $orderMapping
+            ]);
+            return $imagePaths;
+        }
     }
 }

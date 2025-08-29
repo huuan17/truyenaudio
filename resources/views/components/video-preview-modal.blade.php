@@ -52,7 +52,7 @@ $(document).ready(function() {
         
         // Update modal content
         $('#{{ $id }}Label').html('<i class="fas fa-play-circle mr-2"></i>' + videoTitle);
-        $('#{{ $id }}Video source').attr('src', videoUrl);
+        $('#{{ $id }}Video').attr('src', videoUrl);
         $('#{{ $id }}Video')[0].load(); // Reload video element
         
         @if($showDownload)

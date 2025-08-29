@@ -46,36 +46,49 @@ class VideoQueueController extends Controller
      */
     public function status()
     {
-        $videoService = new VideoGenerationService();
-        $queueStatus = $videoService->getQueueStatus();
-        
-        // Get user's recent tasks
-        $userTasks = VideoGenerationTask::forUser(auth()->id())
-                                       ->orderBy('created_at', 'desc')
-                                       ->limit(10)
-                                       ->get()
-                                       ->map(function ($task) {
-                                           return [
-                                               'id' => $task->id,
-                                               'platform' => $task->platform_display,
-                                               'type' => $task->type_display,
-                                               'status' => $task->status,
-                                               'status_display' => $task->status_display,
-                                               'status_badge_class' => $task->status_badge_class,
-                                               'progress' => $task->progress_percentage,
-                                               'created_at' => $task->created_at->format('H:i:s d/m/Y'),
-                                               'estimated_completion' => $task->estimated_completion ? $task->estimated_completion->format('H:i:s d/m/Y') : null,
-                                               'duration' => $task->duration,
-                                               'can_cancel' => $task->canBeCancelled(),
-                                               'can_retry' => $task->canBeRetried(),
-                                               'batch_progress' => $task->batch_progress
-                                           ];
-                                       });
-        
-        return response()->json([
-            'queue_status' => $queueStatus,
-            'user_tasks' => $userTasks
-        ]);
+        try {
+            $videoService = new VideoGenerationService();
+            $queueStatus = $videoService->getQueueStatus();
+
+            // Get user's recent tasks
+            $userTasks = VideoGenerationTask::forUser(auth()->id())
+                                           ->orderBy('created_at', 'desc')
+                                           ->limit(10)
+                                           ->get()
+                                           ->map(function ($task) {
+                                               return [
+                                                   'id' => $task->id,
+                                                   'platform' => $task->platform_display,
+                                                   'type' => $task->type_display,
+                                                   'status' => $task->status,
+                                                   'status_display' => $task->status_display,
+                                                   'status_badge_class' => $task->status_badge_class,
+                                                   'progress' => $task->progress_percentage,
+                                                   'created_at' => $task->created_at->format('H:i:s d/m/Y'),
+                                                   'estimated_completion' => $task->estimated_completion ? $task->estimated_completion->format('H:i:s d/m/Y') : null,
+                                                   'duration' => $task->duration,
+                                                   'can_cancel' => $task->canBeCancelled(),
+                                                   'can_retry' => $task->canBeRetried(),
+                                                   'batch_progress' => $task->batch_progress
+                                               ];
+                                           });
+
+            return response()->json([
+                'queue_status' => $queueStatus,
+                'user_tasks' => $userTasks
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Video queue status error: ' . $e->getMessage(), [
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Có lỗi xảy ra khi lấy trạng thái queue',
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

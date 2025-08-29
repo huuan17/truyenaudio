@@ -289,6 +289,53 @@ class VideoTemplateController extends Controller
     }
 
     /**
+     * Save layout configuration from drag & drop editor
+     */
+    public function saveLayout(Request $request)
+    {
+        $request->validate([
+            'template_id' => 'required|exists:video_templates,id',
+            'layout_config' => 'required|array'
+        ]);
+
+        try {
+            $template = VideoTemplate::findOrFail($request->template_id);
+
+            // Check if user can edit this template
+            if ($template->created_by !== auth()->id() && !auth()->user()->isAdmin()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bạn không có quyền chỉnh sửa template này.'
+                ], 403);
+            }
+
+            // Get current settings
+            $settings = $template->settings;
+
+            // Add layout config to settings
+            $settings['layout_config'] = $request->layout_config;
+            $settings['layout_updated_at'] = now()->toISOString();
+
+            // Update template
+            $template->update(['settings' => $settings]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Layout đã được lưu thành công!',
+                'layout_config' => $request->layout_config
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error saving layout config: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi khi lưu layout: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Use template to generate video
      */
     public function use(VideoTemplate $videoTemplate)
@@ -386,4 +433,130 @@ class VideoTemplateController extends Controller
 
         return $data;
     }
+
+    /**
+     * Generate preview video for template
+     */
+    public function generatePreview(Request $request)
+    {
+        try {
+            $request->validate([
+                'template_id' => 'required|exists:video_templates,id',
+                'settings' => 'required|string',
+                'preview_text' => 'nullable|string|max:1000',
+                'preview_image' => 'nullable|image|mimes:jpg,jpeg,png|max:5120' // 5MB
+            ]);
+
+            $template = VideoTemplate::findOrFail($request->template_id);
+            $settings = json_decode($request->settings, true);
+
+            if (!$settings) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cài đặt template không hợp lệ'
+                ]);
+            }
+
+            // Generate unique preview ID
+            $previewId = 'preview_' . uniqid();
+            $tempDir = storage_path('app/temp/preview/' . $previewId);
+
+            if (!file_exists($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+
+            // Handle preview image using DemoMediaService
+            $demoMediaService = app(\App\Services\DemoMediaService::class);
+            $previewImagePath = null;
+
+            if ($request->hasFile('preview_image')) {
+                $previewImagePath = $request->file('preview_image')->store('temp/preview_uploads', 'local');
+                $previewImagePath = storage_path('app/' . $previewImagePath);
+            } else {
+                // Use demo image with template settings
+                $previewImagePath = $demoMediaService->getDemoImage($settings);
+            }
+
+            // Prepare preview components with template settings
+            $components = [
+                'images' => [$previewImagePath],
+                'audio' => null, // Could add demo audio later
+                'subtitle' => [
+                    'text' => $request->preview_text ?: 'Đây là text demo để xem subtitle tiếng Việt có dấu hoạt động như thế nào trong video.',
+                    'size' => $settings['subtitle_size'] ?? 24,
+                    'color' => $settings['subtitle_color'] ?? '#FFFFFF',
+                    'position' => $settings['subtitle_position'] ?? 'bottom',
+                    'font' => $settings['subtitle_font'] ?? 'Arial'
+                ],
+                'template_settings' => $settings
+            ];
+
+            $isAutoUpdate = $request->boolean('auto_update', false);
+
+            \Log::info('Preview generation started', [
+                'preview_id' => $previewId,
+                'components' => $components,
+                'auto_update' => $isAutoUpdate,
+                'template_settings_applied' => [
+                    'resolution' => $settings['resolution'] ?? '1920x1080',
+                    'subtitle_size' => $settings['subtitle_size'] ?? 24,
+                    'subtitle_color' => $settings['subtitle_color'] ?? '#ffffff',
+                    'subtitle_position' => $settings['subtitle_position'] ?? 'bottom',
+                    'logo_enabled' => $settings['enable_logo'] ?? false,
+                    'logo_position' => $settings['logo_position'] ?? 'bottom-right'
+                ]
+            ]);
+
+            // Generate preview video using existing preview service
+            $previewService = app(\App\Services\VideoPreviewService::class);
+            $result = $previewService->generatePreview($components, $previewId);
+
+            if ($result['success']) {
+                // Move preview to public accessible location
+                $publicPreviewPath = 'videos/previews/' . $previewId . '.mp4';
+                $publicFullPath = storage_path('app/public/' . $publicPreviewPath);
+
+                // Ensure directory exists
+                $publicDir = dirname($publicFullPath);
+                if (!file_exists($publicDir)) {
+                    mkdir($publicDir, 0755, true);
+                }
+
+                // Copy preview to public location
+                if (file_exists($result['video_path'])) {
+                    copy($result['video_path'], $publicFullPath);
+
+                    return response()->json([
+                        'success' => true,
+                        'preview_url' => asset('storage/' . $publicPreviewPath),
+                        'preview_id' => $previewId,
+                        'message' => 'Preview đã được tạo thành công'
+                    ]);
+                } else {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Không thể tạo file preview'
+                    ]);
+                }
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['error'] ?? 'Có lỗi xảy ra khi tạo preview'
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Preview generation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+
 }

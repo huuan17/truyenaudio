@@ -82,21 +82,21 @@
                 <div class="col-md-3">
                     <div class="form-group">
                         <label for="{{ $prefix }}_subtitle_color">Màu chữ</label>
-                        <input type="color" name="subtitle_color" id="{{ $prefix }}_subtitle_color" 
-                               class="form-control" value="{{ old('subtitle_color', '#FFFFFF') }}">
+                        <input type="color" name="{{ $prefix }}_subtitle_color" id="{{ $prefix }}_subtitle_color"
+                               class="form-control" value="{{ old($prefix.'_subtitle_color', '#FFFFFF') }}">
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
                         <label for="{{ $prefix }}_subtitle_background">Màu nền</label>
-                        <input type="color" name="subtitle_background" id="{{ $prefix }}_subtitle_background" 
-                               class="form-control" value="{{ old('subtitle_background', '#000000') }}">
+                        <input type="color" name="{{ $prefix }}_subtitle_background" id="{{ $prefix }}_subtitle_background"
+                               class="form-control" value="{{ old($prefix.'_subtitle_background', '#000000') }}">
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="form-group">
                         <label for="{{ $prefix }}_subtitle_font">Font chữ</label>
-                        <select name="subtitle_font" id="{{ $prefix }}_subtitle_font" class="form-control">
+                        <select name="{{ $prefix }}_subtitle_font" id="{{ $prefix }}_subtitle_font" class="form-control">
                             <option value="Arial" {{ old('subtitle_font', 'Arial') == 'Arial' ? 'selected' : '' }}>Arial</option>
                             <option value="Times" {{ old('subtitle_font') == 'Times' ? 'selected' : '' }}>Times New Roman</option>
                             <option value="Helvetica" {{ old('subtitle_font') == 'Helvetica' ? 'selected' : '' }}>Helvetica</option>

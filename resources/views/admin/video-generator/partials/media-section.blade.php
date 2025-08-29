@@ -37,16 +37,22 @@
 
             <!-- Individual Image Settings -->
             <div id="individual-image-settings" style="display: none;">
-                <h6 class="mb-3"><i class="fas fa-cog mr-2"></i>Cài đặt từng ảnh</h6>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0"><i class="fas fa-cog mr-2"></i>Cài đặt từng ảnh</h6>
+                    <small class="text-muted">Tùy chỉnh thời gian và hiệu ứng cho từng ảnh riêng biệt</small>
+                </div>
                 <div id="image-items-container">
                     <!-- Individual image items will be populated here -->
                 </div>
             </div>
 
             <!-- Global Image Settings -->
-            <div class="card mt-3">
+            <div class="card mt-3" id="image-settings-section" style="display: none;">
                 <div class="card-header">
-                    <h6 class="mb-0">Cài đặt chung cho tất cả ảnh</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Cài đặt chung cho tất cả ảnh</h6>
+                        <small class="text-muted">Áp dụng cùng một cài đặt cho tất cả ảnh</small>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row">
@@ -75,6 +81,28 @@
                                 <label for="transition_duration">Thời gian hiệu ứng (giây)</label>
                                 <input type="number" name="transition_duration" id="transition_duration"
                                        class="form-control" min="0.1" max="2" step="0.1" value="0.5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Global Image Settings -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="slide_duration">Thời gian mỗi ảnh (giây)</label>
+                                <input type="number" name="slide_duration" id="slide_duration"
+                                       class="form-control" min="1" max="10" value="3">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="slide_transition">Hiệu ứng chuyển ảnh</label>
+                                <select name="slide_transition" id="slide_transition" class="form-control">
+                                    <option value="slide">Slide</option>
+                                    <option value="fade">Fade</option>
+                                    <option value="zoom">Zoom</option>
+                                    <option value="none">Không có</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -138,16 +166,32 @@
                 </div>
             </div>
 
-            <!-- File Upload -->
-            <div class="form-group">
-                <label>Chọn hình ảnh và video</label>
-                <input type="file" name="mixed_media[]" id="mixed_media"
-                       class="form-control-file" accept="image/*,video/*" multiple
-                       onchange="previewMixedMediaAdvanced(this)">
-                <small class="form-text text-muted">
-                    Chọn nhiều file (ảnh: JPG, PNG, GIF; video: MP4, AVI, MOV)
-                </small>
-                <div id="mixed-preview" class="mt-3"></div>
+            <!-- Separate File Uploads -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Chọn hình ảnh</label>
+                        <input type="file" name="mixed_images[]" id="mixed_images"
+                               class="form-control-file" accept="image/*" multiple
+                               onchange="previewMixedImages(this)">
+                        <small class="form-text text-muted">
+                            Chọn nhiều ảnh (JPG, PNG, GIF)
+                        </small>
+                        <div id="mixed-images-preview" class="mt-3"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label>Chọn video</label>
+                        <input type="file" name="mixed_videos[]" id="mixed_videos"
+                               class="form-control-file" accept="video/*" multiple
+                               onchange="previewMixedVideos(this)">
+                        <small class="form-text text-muted">
+                            Chọn nhiều video (MP4, AVI, MOV)
+                        </small>
+                        <div id="mixed-videos-preview" class="mt-3"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Sequence Mode Settings -->
@@ -157,33 +201,91 @@
                         <h6 class="mb-0">Cài đặt xen kẽ tuần tự</h6>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="sequence_image_duration">Thời gian hiển thị ảnh (giây)</label>
-                                    <input type="number" name="sequence_image_duration" id="sequence_image_duration"
-                                           class="form-control" min="1" max="30" value="4">
+                        <!-- Sequence Strategy -->
+                        <div class="form-group">
+                            <label class="form-label">Chiến lược xen kẽ</label>
+                            <div class="btn-group btn-group-toggle d-block" data-toggle="buttons">
+                                <label class="btn btn-outline-primary active mr-2 mb-2">
+                                    <input type="radio" name="sequence_strategy" value="even_distribution" checked>
+                                    <i class="fas fa-equals mr-1"></i>Chia đều video + chèn ảnh
+                                </label>
+                                <label class="btn btn-outline-primary mr-2 mb-2">
+                                    <input type="radio" name="sequence_strategy" value="alternating">
+                                    <i class="fas fa-exchange-alt mr-1"></i>Xen kẽ 1:1 (ảnh-video-ảnh)
+                                </label>
+                            </div>
+                            <small class="form-text text-muted">
+                                <strong>Chia đều:</strong> Video được chia thành các phần, ảnh chèn vào các khoảng đều nhau<br>
+                                <strong>Xen kẽ 1:1:</strong> Ảnh và video hiển thị luân phiên theo thứ tự
+                            </small>
+                        </div>
+
+                        <!-- Even Distribution Settings -->
+                        <div id="even-distribution-settings">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="image_display_duration">Thời gian hiển thị ảnh (giây)</label>
+                                        <input type="number" name="image_display_duration" id="image_display_duration"
+                                               class="form-control" min="0.5" max="10" value="2" step="0.5">
+                                        <small class="form-text text-muted">Thời gian mỗi ảnh hiển thị trên video</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="image_distribution_mode">Cách phân bố ảnh</label>
+                                        <select name="image_distribution_mode" id="image_distribution_mode" class="form-control">
+                                            <option value="auto_even">Tự động chia đều</option>
+                                            <option value="custom_timing">Tùy chỉnh thời điểm</option>
+                                        </select>
+                                        <small class="form-text text-muted">Chọn cách ảnh được phân bố trong video</small>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+
+                            <!-- Custom Timing Settings -->
+                            <div id="custom-timing-settings" style="display: none;">
                                 <div class="form-group">
-                                    <label for="sequence_video_duration">Thời gian hiển thị video (giây)</label>
-                                    <select name="sequence_video_duration" id="sequence_video_duration" class="form-control">
-                                        <option value="full">Toàn bộ video</option>
-                                        <option value="5">5 giây</option>
-                                        <option value="10" selected>10 giây</option>
-                                        <option value="15">15 giây</option>
-                                        <option value="custom">Tùy chỉnh</option>
-                                    </select>
+                                    <label>Thời điểm hiển thị từng ảnh</label>
+                                    <div id="image-timing-controls">
+                                        <!-- Will be populated by JavaScript -->
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Chỉ định thời điểm (giây) mà mỗi ảnh sẽ hiển thị trong video
+                                    </small>
                                 </div>
                             </div>
                         </div>
 
-                        <div id="custom-video-duration" style="display: none;">
-                            <div class="form-group">
-                                <label for="custom_video_seconds">Thời gian video tùy chỉnh (giây)</label>
-                                <input type="number" name="custom_video_seconds" id="custom_video_seconds"
-                                       class="form-control" min="1" max="300" value="8">
+                        <!-- Alternating Settings -->
+                        <div id="alternating-settings" style="display: none;">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="sequence_image_duration">Thời gian hiển thị ảnh (giây)</label>
+                                        <input type="number" name="sequence_image_duration" id="sequence_image_duration"
+                                               class="form-control" min="1" max="30" value="4">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="sequence_video_duration">Thời gian hiển thị video (giây)</label>
+                                        <select name="sequence_video_duration" id="sequence_video_duration" class="form-control">
+                                            <option value="full">Toàn bộ video</option>
+                                            <option value="5">5 giây</option>
+                                            <option value="10" selected>10 giây</option>
+                                            <option value="15">15 giây</option>
+                                            <option value="custom">Tùy chỉnh</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="custom-video-duration" style="display: none;">
+                                <div class="form-group">
+                                    <label for="custom_video_seconds">Thời gian video tùy chỉnh (giây)</label>
+                                    <input type="number" name="custom_video_seconds" id="custom_video_seconds"
+                                           class="form-control" min="1" max="300" value="8">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -318,6 +420,76 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mixed Media Image Settings -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-images mr-2"></i>Cài đặt ảnh trong chế độ hỗn hợp</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="mixed_image_duration">Thời gian hiển thị mỗi ảnh (giây)</label>
+                                <input type="number" name="mixed_image_duration" id="mixed_image_duration"
+                                       class="form-control" min="1" max="30" value="3" step="0.5">
+                                <small class="form-text text-muted">Thời gian hiển thị cho mỗi ảnh</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="mixed_image_transition">Hiệu ứng chuyển cảnh ảnh</label>
+                                <select name="mixed_image_transition" id="mixed_image_transition" class="form-control">
+                                    <option value="none">Không có</option>
+                                    <option value="fade" selected>Mờ dần</option>
+                                    <option value="slide">Trượt</option>
+                                    <option value="zoom">Phóng to</option>
+                                    <option value="dissolve">Hòa tan</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Hành vi nội dung ảnh</label>
+                        <div class="btn-group btn-group-toggle d-block" data-toggle="buttons">
+                            <label class="btn btn-outline-info active mr-2 mb-2">
+                                <input type="radio" name="mixed_content_behavior" value="loop" checked>
+                                <i class="fas fa-redo mr-1"></i>Lặp lại ảnh
+                            </label>
+                            <label class="btn btn-outline-info mr-2 mb-2">
+                                <input type="radio" name="mixed_content_behavior" value="hold_last">
+                                <i class="fas fa-pause mr-1"></i>Giữ ảnh cuối
+                            </label>
+                            <label class="btn btn-outline-info mb-2">
+                                <input type="radio" name="mixed_content_behavior" value="black_screen">
+                                <i class="fas fa-square mr-1"></i>Màn hình đen
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Xử lý khi hết ảnh nhưng video/âm thanh vẫn còn
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="mixed_auto_adjust_images" name="mixed_auto_adjust_images" value="1" checked>
+                            <label class="custom-control-label" for="mixed_auto_adjust_images">
+                                <i class="fas fa-magic mr-1"></i>Tự động điều chỉnh ảnh
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">
+                            Tự động cắt, scale và căn chỉnh ảnh cho phù hợp với video
+                        </small>
+                    </div>
+
+                    <!-- Mixed Media Duration Info -->
+                    <div id="mixed-duration-info" class="alert alert-info">
+                        <i class="fas fa-clock mr-1"></i>
+                        Tổng thời lượng ước tính: <strong>0 giây</strong> (0 items)
                     </div>
                 </div>
             </div>

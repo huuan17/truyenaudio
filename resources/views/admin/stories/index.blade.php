@@ -233,6 +233,7 @@
                             <!-- Smart Crawl Button -->
                             <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST" style="display: inline;">
                                 @csrf
+                                <input type="hidden" name="confirm" value="1">
                                 <button type="submit" class="btn btn-sm btn-success btn-block" title="Crawl chương thiếu">
                                     <i class="fas fa-download"></i> Smart Crawl
                                 </button>
@@ -257,12 +258,31 @@
                                     </button>
                                 </form>
                             </div>
-                        @else
-                            <!-- Re-crawl Button -->
+                        @elseif($story->crawl_status == config('constants.CRAWL_STATUS.VALUES.CRAWLED'))
+                            <!-- Crawled Successfully -->
+                            <div class="text-center">
+                                <span class="badge badge-success">
+                                    <i class="fas fa-check-circle"></i> Đã crawl xong
+                                </span>
+                                <br>
+                                <small class="text-muted mt-1 d-block">{{ $story->chapters_count }} chương</small>
+                            </div>
+                        @elseif($story->crawl_status == config('constants.CRAWL_STATUS.VALUES.FAILED'))
+                            <!-- Failed - Allow Re-crawl -->
                             <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST" style="display: inline;">
                                 @csrf
-                                <button type="submit" class="btn btn-sm btn-outline-success btn-block" title="Crawl lại chương thiếu">
-                                    <i class="fas fa-redo"></i> Re-crawl Missing
+                                <input type="hidden" name="confirm" value="1">
+                                <button type="submit" class="btn btn-sm btn-danger btn-block" title="Crawl lại do thất bại">
+                                    <i class="fas fa-exclamation-triangle"></i> Retry Crawl
+                                </button>
+                            </form>
+                        @else
+                            <!-- Other statuses - Smart Crawl -->
+                            <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST" style="display: inline;">
+                                @csrf
+                                <input type="hidden" name="confirm" value="1">
+                                <button type="submit" class="btn btn-sm btn-outline-success btn-block" title="Smart crawl">
+                                    <i class="fas fa-redo"></i> Smart Crawl
                                 </button>
                             </form>
                         @endif
@@ -450,10 +470,11 @@ function updateCrawlActions(story) {
 
     let actionsHtml = '';
 
-    if (story.crawl_status == 0 || story.crawl_status == 2) { // NOT_CRAWLED or RE_CRAWL
+    if (story.crawl_status == 0 || story.crawl_status == 5) { // NOT_CRAWLED or RE_CRAWL
         actionsHtml = `
             <form action="/admin/stories/${story.slug}/smart-crawl" method="POST" style="display: inline;">
                 <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                <input type="hidden" name="confirm" value="1">
                 <button type="submit" class="btn btn-sm btn-success btn-block" title="Crawl chương thiếu">
                     <i class="fas fa-download"></i> Smart Crawl
                 </button>
@@ -480,12 +501,33 @@ function updateCrawlActions(story) {
                 </form>
             </div>
         `;
-    } else { // CRAWLED
+    } else if (story.crawl_status == 2) { // CRAWLED
+        actionsHtml = `
+            <div class="text-center">
+                <span class="badge badge-success">
+                    <i class="fas fa-check-circle"></i> Đã crawl xong
+                </span>
+                <br>
+                <small class="text-muted mt-1 d-block">${story.chapter_count || 0} chương</small>
+            </div>
+        `;
+    } else if (story.crawl_status == 4) { // FAILED
         actionsHtml = `
             <form action="/admin/stories/${story.slug}/smart-crawl" method="POST" style="display: inline;">
                 <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
-                <button type="submit" class="btn btn-sm btn-outline-success btn-block" title="Crawl lại chương thiếu">
-                    <i class="fas fa-redo"></i> Re-crawl Missing
+                <input type="hidden" name="confirm" value="1">
+                <button type="submit" class="btn btn-sm btn-danger btn-block" title="Crawl lại do thất bại">
+                    <i class="fas fa-exclamation-triangle"></i> Retry Crawl
+                </button>
+            </form>
+        `;
+    } else { // Other statuses
+        actionsHtml = `
+            <form action="/admin/stories/${story.slug}/smart-crawl" method="POST" style="display: inline;">
+                <input type="hidden" name="_token" value="${document.querySelector('meta[name="csrf-token"]').getAttribute('content')}">
+                <input type="hidden" name="confirm" value="1">
+                <button type="submit" class="btn btn-sm btn-outline-success btn-block" title="Smart crawl">
+                    <i class="fas fa-redo"></i> Smart Crawl
                 </button>
             </form>
         `;

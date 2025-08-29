@@ -16,7 +16,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Register video preview services
+        $this->app->singleton(\App\Services\VideoPreviewService::class);
+        $this->app->singleton(\App\Services\DemoMediaService::class);
     }
 
     /**

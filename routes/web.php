@@ -167,6 +167,15 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/channels/{channel}/test-connection', [App\Http\Controllers\Admin\ChannelController::class, 'testConnection'])->name('channels.test-connection');
         Route::get('/channels-api', [App\Http\Controllers\Admin\ChannelController::class, 'getChannelsApi'])->name('channels.api');
 
+        // YouTube OAuth connect/callback
+        Route::get('/channels/{channel}/youtube/connect', [App\Http\Controllers\Admin\YoutubeAuthController::class, 'connect'])->name('channels.youtube.connect');
+        Route::get('/channels/youtube/callback', [App\Http\Controllers\Admin\YoutubeAuthController::class, 'callback'])->name('channels.youtube.callback');
+
+        // TikTok OAuth for channel creation
+        Route::post('/channels/tiktok/oauth/start', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'startOAuthForNewChannel'])->name('channels.tiktok.oauth.start');
+        Route::get('/channels/tiktok/oauth/callback', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'callbackForNewChannel'])->name('channels.tiktok.oauth.callback');
+        Route::post('/channels/tiktok/get-channel-id', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'getChannelId'])->name('channels.tiktok.get-channel-id');
+
         // Scheduled Posts Management
         Route::resource('scheduled-posts', App\Http\Controllers\Admin\ScheduledPostController::class);
         Route::patch('/scheduled-posts/{scheduledPost}/cancel', [App\Http\Controllers\Admin\ScheduledPostController::class, 'cancel'])->name('scheduled-posts.cancel');
@@ -179,7 +188,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/video-generator', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'index'])->name('video-generator.index');
         Route::get('/video-generator/status', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'status'])->name('video-generator.status');
         Route::post('/video-generator/generate', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generate'])->name('video-generator.generate');
-        Route::post('/video-generator/generate-batch', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generateBatch'])->name('video-generator.generate-batch');
         Route::delete('/video-generator/delete', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'delete'])->name('video-generator.delete');
         Route::get('/video-generator/download/{platform}/{filename}', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'download'])->name('video-generator.download');
 
@@ -198,12 +206,29 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/video-generator/validate-media', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'validateMedia'])->name('video-generator.validate-media');
         Route::get('/video-generator/logo-library', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'getLogoLibrary'])->name('video-generator.logo-library');
         Route::post('/video-generator/generate-from-template', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generateFromTemplate'])->name('video-generator.generate-from-template');
+        Route::post('/video-generator/generate-batch-from-template', [App\Http\Controllers\Admin\VideoGeneratorController::class, 'generateBatchFromTemplate'])->name('video-generator.generate-batch-from-template');
+
+        // Video Publishing Management
+        Route::prefix('video-publishing')->name('video-publishing.')->group(function () {
+            Route::get('/', [App\Http\Controllers\Admin\VideoPublishingController::class, 'index'])->name('index');
+            Route::get('/scheduled', [App\Http\Controllers\Admin\VideoPublishingController::class, 'scheduled'])->name('scheduled');
+            Route::post('/bulk-action', [App\Http\Controllers\Admin\VideoPublishingController::class, 'bulkAction'])->name('bulk-action');
+            Route::get('/{videoPublishing}', [App\Http\Controllers\Admin\VideoPublishingController::class, 'show'])->name('show');
+            Route::get('/{videoPublishing}/edit', [App\Http\Controllers\Admin\VideoPublishingController::class, 'edit'])->name('edit');
+            Route::put('/{videoPublishing}', [App\Http\Controllers\Admin\VideoPublishingController::class, 'update'])->name('update');
+            Route::post('/{videoPublishing}/publish', [App\Http\Controllers\Admin\VideoPublishingController::class, 'publish'])->name('publish');
+            Route::post('/{videoPublishing}/cancel', [App\Http\Controllers\Admin\VideoPublishingController::class, 'cancel'])->name('cancel');
+            Route::post('/{videoPublishing}/retry', [App\Http\Controllers\Admin\VideoPublishingController::class, 'retry'])->name('retry');
+            Route::post('/{videoPublishing}/sync-status', [App\Http\Controllers\Admin\VideoPublishingController::class, 'syncStatus'])->name('sync-status');
+        });
 
         // Video Template routes
         Route::resource('video-templates', App\Http\Controllers\Admin\VideoTemplateController::class)
               ->middleware(\App\Http\Middleware\LogRequests::class);
         Route::get('/video-templates/{videoTemplate}/use', [App\Http\Controllers\Admin\VideoTemplateController::class, 'use'])->name('video-templates.use');
         Route::post('/video-templates/{videoTemplate}/duplicate', [App\Http\Controllers\Admin\VideoTemplateController::class, 'duplicate'])->name('video-templates.duplicate');
+        Route::post('/video-templates/generate-preview', [App\Http\Controllers\Admin\VideoTemplateController::class, 'generatePreview'])->name('video-templates.generate-preview');
+        Route::post('/video-templates/save-layout', [App\Http\Controllers\Admin\VideoTemplateController::class, 'saveLayout'])->name('video-templates.save-layout');
 
         // Video Preview routes
         Route::post('/video-preview/upload', [App\Http\Controllers\Admin\VideoPreviewController::class, 'uploadFiles'])->name('video-preview.upload');
@@ -335,6 +360,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/video-queue', [App\Http\Controllers\Admin\VideoQueueController::class, 'index'])->name('video-queue.index');
         Route::get('/video-queue/status', [App\Http\Controllers\Admin\VideoQueueController::class, 'status'])->name('video-queue.status');
         Route::get('/video-queue/worker-status', [App\Http\Controllers\Admin\VideoQueueController::class, 'getWorkerStatus'])->name('video-queue.worker-status');
+        Route::get('/video-queue/{taskId}', [App\Http\Controllers\Admin\VideoQueueController::class, 'show'])->name('video-queue.show');
         Route::post('/video-queue/{taskId}/cancel', [App\Http\Controllers\Admin\VideoQueueController::class, 'cancel'])->name('video-queue.cancel');
         Route::post('/video-queue/{taskId}/retry', [App\Http\Controllers\Admin\VideoQueueController::class, 'retry'])->name('video-queue.retry');
 

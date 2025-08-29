@@ -13,24 +13,48 @@ class UpdateCrawlStatus extends Command
 
     public function handle()
     {
-        $this->info("Updating crawl status...");
-        
-        $stories = Story::where("crawl_status", 0)->get();
+        $this->info("🔍 Checking crawl status for all stories...");
+
+        // Get stories that might need status update (not CRAWLED)
+        $stories = Story::whereNotIn('crawl_status', [2])->get(); // Exclude CRAWLED (2)
         $updated = 0;
-        
+
         foreach ($stories as $story) {
-            $actualChapters = Chapter::where("story_id", $story->id)->count();
+            $actualChapters = $story->chapters()->count();
             $expectedChapters = $story->end_chapter - $story->start_chapter + 1;
-            
-            if ($actualChapters >= $expectedChapters) {
-                $story->crawl_status = 1;
-                $story->save();
+
+            $this->line("📖 {$story->title} (ID: {$story->id}):");
+            $this->line("   Current Status: {$story->crawl_status} (" . $this->getStatusLabel($story->crawl_status) . ")");
+            $this->line("   Chapters: {$actualChapters}/{$expectedChapters}");
+
+            // If story has all expected chapters, mark as CRAWLED
+            if ($actualChapters >= $expectedChapters && $expectedChapters > 0) {
+                $oldStatus = $story->crawl_status;
+                $story->update(['crawl_status' => 2]); // CRAWLED
                 $updated++;
-                $this->info("✅ {$story->title}: Marked as completed");
+                $this->info("   ✅ Updated: {$this->getStatusLabel($oldStatus)} → CRAWLED");
+            } else {
+                $this->line("   ⏳ No update needed");
             }
+
+            $this->line("");
         }
-        
-        $this->info("Updated {$updated} stories");
+
+        $this->info("🎉 Updated {$updated} stories to CRAWLED status");
         return 0;
+    }
+
+    private function getStatusLabel($status)
+    {
+        $labels = [
+            0 => 'NOT_CRAWLED',
+            1 => 'PENDING',
+            2 => 'CRAWLED',
+            3 => 'CRAWLING',
+            4 => 'FAILED',
+            5 => 'RE_CRAWL'
+        ];
+
+        return $labels[$status] ?? 'UNKNOWN';
     }
 }

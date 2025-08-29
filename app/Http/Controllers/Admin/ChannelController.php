@@ -56,8 +56,10 @@ class ChannelController extends Controller
             'default_tags' => 'nullable|string',
             'default_category' => 'nullable|string',
             'auto_upload' => 'boolean',
-            
+
             // API Credentials
+            'tiktok_client_key' => 'nullable|string',
+            'tiktok_client_secret' => 'nullable|string',
             'tiktok_access_token' => 'nullable|string',
             'tiktok_refresh_token' => 'nullable|string',
             'youtube_client_id' => 'nullable|string',
@@ -80,11 +82,24 @@ class ChannelController extends Controller
             // Prepare API credentials
             $apiCredentials = [];
             if ($request->platform === 'tiktok') {
-                if ($request->tiktok_access_token) {
-                    $apiCredentials = [
-                        'access_token' => $request->tiktok_access_token,
-                        'refresh_token' => $request->tiktok_refresh_token,
-                    ];
+                if ($request->tiktok_client_key || $request->tiktok_access_token) {
+                    $apiCredentials = [];
+
+                    // Always store client credentials if provided
+                    if ($request->tiktok_client_key) {
+                        $apiCredentials['client_key'] = $request->tiktok_client_key;
+                    }
+                    if ($request->tiktok_client_secret) {
+                        $apiCredentials['client_secret'] = $request->tiktok_client_secret;
+                    }
+
+                    // Store tokens if provided (from OAuth flow)
+                    if ($request->tiktok_access_token) {
+                        $apiCredentials['access_token'] = $request->tiktok_access_token;
+                    }
+                    if ($request->tiktok_refresh_token) {
+                        $apiCredentials['refresh_token'] = $request->tiktok_refresh_token;
+                    }
                 }
             } elseif ($request->platform === 'youtube') {
                 if ($request->youtube_client_id) {
@@ -182,6 +197,12 @@ class ChannelController extends Controller
             'tiktok_refresh_token' => 'nullable|string',
             'tiktok_open_id' => 'nullable|string',
             'clear_tiktok_credentials' => 'boolean',
+
+            // YouTube credentials (manual update)
+            'youtube_client_id' => 'nullable|string',
+            'youtube_client_secret' => 'nullable|string',
+            'youtube_refresh_token' => 'nullable|string',
+            'clear_youtube_credentials' => 'boolean',
         ]);
 
         try {
@@ -206,6 +227,10 @@ class ChannelController extends Controller
 
             // Handle TikTok API credentials update
             $apiCredentials = $channel->api_credentials;
+
+
+	            // Track if credentials changed
+	            $apiCredsModified = false;
 
             if ($channel->platform === 'tiktok') {
                 // Clear credentials if requested
@@ -235,6 +260,42 @@ class ChannelController extends Controller
                         if (!$apiCredentials) {
                             $apiCredentials = [];
                         }
+
+	            // Handle YouTube API credentials update
+	            if ($channel->platform === 'youtube') {
+	                if ($request->boolean('clear_youtube_credentials')) {
+	                    $apiCredentials = null;
+	                } else {
+	                    if (!$apiCredentials) { $apiCredentials = []; }
+	                    // Only update fields that are provided
+	                    if ($request->filled('youtube_client_id')) {
+	                        $apiCredentials['client_id'] = $request->youtube_client_id;
+	                        $apiCredentials['updated_at'] = now()->toDateTimeString();
+	                        $apiCredentials['updated_manually'] = true;
+	                    }
+	                    if ($request->filled('youtube_client_secret')) {
+	                        $apiCredentials['client_secret'] = $request->youtube_client_secret;
+	                        $apiCredentials['updated_at'] = now()->toDateTimeString();
+	                        $apiCredentials['updated_manually'] = true;
+
+	            if ($channel->platform === 'youtube' && (
+	                $request->boolean('clear_youtube_credentials') ||
+	                $request->filled('youtube_client_id') ||
+	                $request->filled('youtube_client_secret') ||
+	                $request->filled('youtube_refresh_token')
+	            )) {
+	                $updateData['api_credentials'] = $apiCredentials;
+	            }
+
+	                    }
+	                    if ($request->filled('youtube_refresh_token')) {
+	                        $apiCredentials['refresh_token'] = $request->youtube_refresh_token;
+	                        $apiCredentials['updated_at'] = now()->toDateTimeString();
+	                        $apiCredentials['updated_manually'] = true;
+	                    }
+	                }
+	            }
+
                         $apiCredentials['open_id'] = $request->tiktok_open_id;
                         $apiCredentials['updated_at'] = now()->toDateTimeString();
                         $apiCredentials['updated_manually'] = true;
@@ -297,7 +358,7 @@ class ChannelController extends Controller
     {
         try {
             $channelName = $channel->name;
-            
+
             // Check if channel has pending posts
             $pendingPosts = $channel->scheduledPosts()->where('status', 'pending')->count();
             if ($pendingPosts > 0) {
@@ -320,7 +381,7 @@ class ChannelController extends Controller
     public function toggleStatus(Channel $channel)
     {
         $channel->update(['is_active' => !$channel->is_active]);
-        
+
         $status = $channel->is_active ? 'kích hoạt' : 'tạm dừng';
         return back()->with('success', "Đã {$status} kênh {$channel->name}!");
     }
@@ -364,10 +425,10 @@ class ChannelController extends Controller
     {
         $logoDir = storage_path('app/logos');
         $logos = [];
-        
+
         if (File::isDirectory($logoDir)) {
             $logoFiles = File::glob($logoDir . '/*.{png,jpg,jpeg,gif,svg}', GLOB_BRACE);
-            
+
             foreach ($logoFiles as $logoPath) {
                 $logos[] = [
                     'name' => basename($logoPath),
@@ -401,21 +462,84 @@ class ChannelController extends Controller
     }
 
     /**
-     * Test YouTube API connection
+     * Test YouTube API connection (real check with Google API)
      */
     private function testYouTubeConnection(Channel $channel)
     {
-        // Implementation for YouTube API test
-        // This would use YouTube Data API to verify credentials
-        return [
-            'success' => true,
-            'message' => 'Kết nối YouTube API thành công',
-            'data' => [
-                'platform' => 'YouTube',
-                'channel_id' => $channel->channel_id,
-                'username' => $channel->username
-            ]
-        ];
+        try {
+            if (!class_exists('Google_Client')) {
+                return [
+                    'success' => false,
+                    'message' => 'Thiếu Google API Client. Vui lòng cài đặt: composer require google/apiclient:^2.15'
+                ];
+            }
+
+            $creds = $channel->api_credentials ?: [];
+            $clientId = $creds['client_id'] ?? config('services.youtube.client_id');
+            $clientSecret = $creds['client_secret'] ?? config('services.youtube.client_secret');
+            $refreshToken = $creds['refresh_token'] ?? null;
+
+            if (!$clientId || !$clientSecret || !$refreshToken) {
+                return [
+                    'success' => false,
+                    'message' => 'Thiếu client_id/client_secret/refresh_token cho YouTube',
+                    'data' => [
+                        'has_client_id' => !empty($clientId),
+                        'has_client_secret' => !empty($clientSecret),
+                        'has_refresh_token' => !empty($refreshToken),
+                    ]
+                ];
+            }
+
+            $client = new \Google_Client();
+            $client->setClientId($clientId);
+            $client->setClientSecret($clientSecret);
+            $client->setAccessType('offline');
+            $client->setScopes(['https://www.googleapis.com/auth/youtube.readonly']);
+
+            // Try refreshing access token
+            $token = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+            if (!is_array($token) || isset($token['error'])) {
+                $err = is_array($token) && isset($token['error']) ? $token['error'] : 'unknown_error';
+                return [
+                    'success' => false,
+                    'message' => 'Lỗi refresh token: ' . $err
+                ];
+            }
+
+            $client->setAccessToken($token);
+            $youtube = new \Google_Service_YouTube($client);
+
+            // Fetch authenticated user's channel info
+            $response = $youtube->channels->listChannels('snippet,statistics', ['mine' => true]);
+            $items = [];
+            if ($response && $response->getItems()) {
+                foreach ($response->getItems() as $item) {
+                    $snippet = $item->getSnippet();
+                    $stats = $item->getStatistics();
+                    $items[] = [
+                        'channel_id' => $item->getId(),
+                        'title' => $snippet ? $snippet->getTitle() : null,
+                        'subscriber_count' => $stats ? $stats->getSubscriberCount() : null,
+                    ];
+                }
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Kết nối YouTube API thành công',
+                'data' => [
+                    'token_expires_in' => $token['expires_in'] ?? null,
+                    'channels' => $items,
+                ]
+            ];
+
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'message' => 'Lỗi kiểm tra YouTube API: ' . $e->getMessage()
+            ];
+        }
     }
 
     /**

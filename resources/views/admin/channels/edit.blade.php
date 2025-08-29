@@ -34,13 +34,13 @@
                         </h4>
                     </div>
                     <div class="card-body">
-                        
+
                         <!-- Tên kênh -->
                         <div class="form-group">
                             <label for="name">
                                 <i class="fas fa-tag mr-1"></i>Tên Kênh *
                             </label>
-                            <input type="text" name="name" id="name" class="form-control" 
+                            <input type="text" name="name" id="name" class="form-control"
                                    placeholder="Ví dụ: Kênh TikTok Chính" value="{{ old('name', $channel->name) }}" required>
                             @error('name')
                                 <div class="text-danger">{{ $message }}</div>
@@ -64,7 +64,7 @@
                                     <label for="channel_id">
                                         <i class="fas fa-id-card mr-1"></i>Channel ID
                                     </label>
-                                    <input type="text" name="channel_id" id="channel_id" class="form-control" 
+                                    <input type="text" name="channel_id" id="channel_id" class="form-control"
                                            placeholder="ID kênh trên platform" value="{{ old('channel_id', $channel->channel_id) }}">
                                     @error('channel_id')
                                         <div class="text-danger">{{ $message }}</div>
@@ -78,7 +78,7 @@
                                     <label for="username">
                                         <i class="fas fa-at mr-1"></i>Username/Handle
                                     </label>
-                                    <input type="text" name="username" id="username" class="form-control" 
+                                    <input type="text" name="username" id="username" class="form-control"
                                            placeholder="@username" value="{{ old('username', $channel->username) }}">
                                     @error('username')
                                         <div class="text-danger">{{ $message }}</div>
@@ -92,7 +92,7 @@
                             <label for="description">
                                 <i class="fas fa-align-left mr-1"></i>Mô Tả Kênh
                             </label>
-                            <textarea name="description" id="description" class="form-control" rows="3" 
+                            <textarea name="description" id="description" class="form-control" rows="3"
                                       placeholder="Mô tả ngắn về kênh này...">{{ old('description', $channel->description) }}</textarea>
                             @error('description')
                                 <div class="text-danger">{{ $message }}</div>
@@ -102,7 +102,7 @@
                         <!-- Status -->
                         <div class="form-group">
                             <div class="custom-control custom-checkbox">
-                                <input type="checkbox" class="custom-control-input" id="is_active" name="is_active" value="1" 
+                                <input type="checkbox" class="custom-control-input" id="is_active" name="is_active" value="1"
                                        {{ old('is_active', $channel->is_active) ? 'checked' : '' }}>
                                 <label class="custom-control-label" for="is_active">
                                     <i class="fas fa-power-off mr-1"></i>Kích Hoạt Kênh
@@ -122,16 +122,16 @@
                         </h4>
                     </div>
                     <div class="card-body">
-                        
+
                         <!-- Current Logo -->
                         @if($channel->logo_config && isset($channel->logo_config['logo_file']))
                         <div class="alert alert-info">
                             <div class="d-flex align-items-center">
-                                <img src="{{ route('admin.logo.serve', $channel->logo_config['logo_file']) }}" 
+                                <img src="{{ route('admin.logo.serve', $channel->logo_config['logo_file']) }}"
                                      alt="Current Logo" style="max-height: 40px; object-fit: contain;" class="mr-3">
                                 <div>
                                     <strong>Logo hiện tại:</strong> {{ $channel->logo_config['logo_file'] }}<br>
-                                    <small>Vị trí: {{ $channel->logo_config['position'] ?? 'bottom-right' }} | 
+                                    <small>Vị trí: {{ $channel->logo_config['position'] ?? 'bottom-right' }} |
                                            Kích thước: {{ $channel->logo_config['size'] ?? 100 }}px</small>
                                 </div>
                                 <div class="ml-auto">
@@ -145,7 +145,7 @@
                             </div>
                         </div>
                         @endif
-                        
+
                         <!-- Chọn logo -->
                         <div class="form-group">
                             <label for="logo_file">
@@ -154,7 +154,7 @@
                             <select name="logo_file" id="logo_file" class="form-control" onchange="previewSelectedLogo()">
                                 <option value="">-- Không thay đổi --</option>
                                 @foreach($logos as $logo)
-                                    <option value="{{ $logo['name'] }}" data-url="{{ $logo['url'] }}" 
+                                    <option value="{{ $logo['name'] }}" data-url="{{ $logo['url'] }}"
                                             {{ old('logo_file') == $logo['name'] ? 'selected' : '' }}>
                                         {{ $logo['display_name'] }}
                                     </option>
@@ -194,8 +194,8 @@
                                         <label for="logo_size">
                                             <i class="fas fa-expand-arrows-alt mr-1"></i>Kích Thước (px)
                                         </label>
-                                        <input type="range" name="logo_size" id="logo_size" class="form-control-range" 
-                                               min="50" max="500" step="10" value="{{ old('logo_size', $channel->logo_config['size'] ?? '100') }}" 
+                                        <input type="range" name="logo_size" id="logo_size" class="form-control-range"
+                                               min="50" max="500" step="10" value="{{ old('logo_size', $channel->logo_config['size'] ?? '100') }}"
                                                oninput="updateLogoSizeDisplay(this.value)">
                                         <div class="text-center">
                                             <span id="logo_size_display" class="badge badge-primary">{{ old('logo_size', $channel->logo_config['size'] ?? '100') }}px</span>
@@ -209,8 +209,8 @@
                                         <label for="logo_opacity">
                                             <i class="fas fa-adjust mr-1"></i>Độ Trong Suốt
                                         </label>
-                                        <input type="range" name="logo_opacity" id="logo_opacity" class="form-control-range" 
-                                               min="0" max="1" step="0.1" value="{{ old('logo_opacity', $channel->logo_config['opacity'] ?? '1.0') }}" 
+                                        <input type="range" name="logo_opacity" id="logo_opacity" class="form-control-range"
+                                               min="0" max="1" step="0.1" value="{{ old('logo_opacity', $channel->logo_config['opacity'] ?? '1.0') }}"
                                                oninput="updateOpacityDisplay(this.value)">
                                         <div class="text-center">
                                             <span id="opacity_display" class="badge badge-info">{{ old('logo_opacity', $channel->logo_config['opacity'] ?? '1.0') }}</span>
@@ -222,7 +222,7 @@
                             <!-- Preview logo -->
                             <div class="form-group">
                                 <label>Preview Logo:</label>
-                                <div id="logo_preview_container" class="border rounded p-3 text-center" 
+                                <div id="logo_preview_container" class="border rounded p-3 text-center"
                                      style="min-height: 120px; background: #f8f9fa; position: relative;">
                                     <div id="logo_preview_placeholder">
                                         <i class="fas fa-image fa-2x text-muted"></i>
@@ -244,7 +244,7 @@
                         </h4>
                     </div>
                     <div class="card-body">
-                        
+
                         <div class="row">
                             <!-- Privacy -->
                             <div class="col-md-4">
@@ -266,7 +266,7 @@
                                     <label for="default_category">
                                         <i class="fas fa-folder mr-1"></i>Danh Mục
                                     </label>
-                                    <input type="text" name="default_category" id="default_category" class="form-control" 
+                                    <input type="text" name="default_category" id="default_category" class="form-control"
                                            placeholder="Entertainment, Education..." value="{{ old('default_category', $channel->default_category) }}">
                                 </div>
                             </div>
@@ -276,7 +276,7 @@
                                 <div class="form-group">
                                     <label>&nbsp;</label>
                                     <div class="custom-control custom-checkbox">
-                                        <input type="checkbox" class="custom-control-input" id="auto_upload" name="auto_upload" value="1" 
+                                        <input type="checkbox" class="custom-control-input" id="auto_upload" name="auto_upload" value="1"
                                                {{ old('auto_upload', $channel->auto_upload) ? 'checked' : '' }}>
                                         <label class="custom-control-label" for="auto_upload">
                                             <i class="fas fa-robot mr-1"></i>Tự Động Upload
@@ -292,8 +292,8 @@
                             <label for="default_tags">
                                 <i class="fas fa-tags mr-1"></i>Tags Mặc Định
                             </label>
-                            <input type="text" name="default_tags" id="default_tags" class="form-control" 
-                                   placeholder="tag1, tag2, tag3..." 
+                            <input type="text" name="default_tags" id="default_tags" class="form-control"
+                                   placeholder="tag1, tag2, tag3..."
                                    value="{{ old('default_tags', $channel->default_tags ? implode(', ', $channel->default_tags) : '') }}">
                             <small class="form-text text-muted">Phân cách bằng dấu phẩy</small>
                         </div>
@@ -319,12 +319,12 @@
                             <i class="fas fa-pause-circle fa-3x text-secondary mb-3"></i>
                             <h6 class="text-secondary">Kênh Tạm Dừng</h6>
                         @endif
-                        
+
                         <p class="text-muted">
                             Tạo: {{ $channel->created_at->format('d/m/Y') }}<br>
                             Cập nhật: {{ $channel->updated_at->diffForHumans() }}
                         </p>
-                        
+
                         @if($channel->last_upload_at)
                             <p class="text-info">
                                 <i class="fas fa-upload mr-1"></i>
@@ -461,10 +461,87 @@
                             </div>
 
                         @elseif($channel->platform === 'youtube')
-                            <!-- YouTube API (Future) -->
-                            <div class="alert alert-info">
-                                <i class="fas fa-info-circle mr-2"></i>
-                                <strong>YouTube API</strong> sẽ được triển khai trong phiên bản tiếp theo.
+                            <!-- YouTube OAuth -->
+                            <div class="mb-4">
+                                @if($channel->hasValidCredentials())
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle mr-2"></i>
+                                        <strong>Đã kết nối YouTube</strong>
+                                        <p class="mb-2">Kênh đã lưu refresh_token và sẵn sàng upload video.</p>
+                                        <a href="{{ route('admin.channels.youtube.connect', $channel) }}" class="btn btn-sm btn-secondary">
+                                            <i class="fab fa-youtube mr-1"></i> Kết nối lại (Re-consent)
+                                        </a>
+                                    </div>
+
+	                                <!-- Manual YouTube Credentials Editing -->
+	                                <div class="card card-outline card-danger mt-3">
+	                                    <div class="card-header">
+	                                        <h6 class="mb-0"><i class="fab fa-youtube mr-1"></i> YouTube Credentials (chỉnh tay)</h6>
+	                                    </div>
+	                                    <div class="card-body">
+	                                        <div class="form-row">
+	                                            <div class="form-group col-md-6">
+	                                                <label for="youtube_client_id">
+	                                                    <i class="fas fa-key mr-1"></i>Client ID
+	                                                </label>
+	                                                <input type="text" name="youtube_client_id" id="youtube_client_id" class="form-control"
+	                                                       placeholder="Nhập Google Client ID (để trống nếu không thay đổi)"
+	                                                       value="{{ old('youtube_client_id', isset($channel->api_credentials['client_id']) ? $channel->api_credentials['client_id'] : config('services.youtube.client_id')) }}">
+	                                                @error('youtube_client_id')
+	                                                    <div class="text-danger">{{ $message }}</div>
+	                                                @enderror
+	                                            </div>
+	                                            <div class="form-group col-md-6">
+	                                                <label for="youtube_client_secret">
+	                                                    <i class="fas fa-lock mr-1"></i>Client Secret
+	                                                </label>
+	                                                <input type="text" name="youtube_client_secret" id="youtube_client_secret" class="form-control"
+	                                                       placeholder="Nhập Google Client Secret (để trống nếu không thay đổi)"
+	                                                       value="{{ old('youtube_client_secret', isset($channel->api_credentials['client_secret']) ? str_repeat('*', 8) : '') }}">
+	                                                <small class="text-muted">(Để trống để giữ nguyên. Nhập giá trị mới để cập nhật.)</small>
+	                                                @error('youtube_client_secret')
+	                                                    <div class="text-danger">{{ $message }}</div>
+	                                                @enderror
+	                                            </div>
+	                                        </div>
+	                                        <div class="form-group">
+	                                            <label for="youtube_refresh_token">
+	                                                <i class="fas fa-redo mr-1"></i>Refresh Token
+	                                            </label>
+	                                            <input type="text" name="youtube_refresh_token" id="youtube_refresh_token" class="form-control"
+	                                                   placeholder="Nhập Refresh Token (để trống nếu không thay đổi)"
+	                                                   value="{{ old('youtube_refresh_token', isset($channel->api_credentials['refresh_token']) ? str_repeat('*', 12) : '') }}">
+	                                            <small class="text-muted">(Để trống để giữ nguyên. Nhập giá trị mới để cập nhật.)</small>
+	                                            @error('youtube_refresh_token')
+	                                                <div class="text-danger">{{ $message }}</div>
+	                                            @enderror
+	                                        </div>
+	                                        <div class="form-group">
+	                                            <div class="form-check">
+	                                                <input type="checkbox" name="clear_youtube_credentials" id="clear_youtube_credentials" class="form-check-input" value="1">
+	                                                <label class="form-check-label text-danger" for="clear_youtube_credentials">
+	                                                    <i class="fas fa-trash mr-1"></i> Xóa toàn bộ YouTube credentials (client_id, client_secret, refresh_token)
+	                                                </label>
+	                                            </div>
+	                                            <small class="text-muted">Chỉ dùng khi muốn cấu hình lại từ đầu.</small>
+	                                        </div>
+	                                        <div class="alert alert-info mb-0">
+	                                            <div><strong>Redirect URI:</strong> {{ route('admin.channels.youtube.callback') }}</div>
+	                                            <small>Hãy thêm URI này vào Authorized redirect URIs trong Google Cloud Console. APP_URL hiện tại: {{ config('app.url') }}</small>
+	                                        </div>
+	                                    </div>
+	                                </div>
+
+                                @else
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                                        <strong>Chưa kết nối YouTube</strong>
+                                        <p class="mb-2">Cần authorize với Google để có thể upload video tự động lên YouTube.</p>
+                                        <a href="{{ route('admin.channels.youtube.connect', $channel) }}" class="btn btn-primary">
+                                            <i class="fab fa-youtube mr-2"></i>Kết nối YouTube
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         @endif
                     </div>
@@ -515,9 +592,9 @@
                         <a href="{{ route('admin.channels.show', $channel) }}" class="btn btn-secondary ml-2">
                             <i class="fas fa-times mr-2"></i>Hủy
                         </a>
-                        
+
                         <div class="float-right">
-                            <form action="{{ route('admin.channels.destroy', $channel) }}" 
+                            <form action="{{ route('admin.channels.destroy', $channel) }}"
                                   method="POST" class="d-inline"
                                   onsubmit="return confirm('Bạn có chắc muốn xóa kênh này?\n\nTất cả lịch đăng sẽ bị xóa!')">
                                 @csrf
@@ -541,11 +618,11 @@ function previewSelectedLogo() {
     const logoSelect = document.getElementById('logo_file');
     const selectedOption = logoSelect.options[logoSelect.selectedIndex];
     const logoUrl = selectedOption.getAttribute('data-url');
-    
+
     const placeholder = document.getElementById('logo_preview_placeholder');
     const previewImg = document.getElementById('logo_preview_img');
     const configSection = document.getElementById('logo_config_section');
-    
+
     if (logoUrl) {
         placeholder.style.display = 'none';
         previewImg.src = logoUrl;
@@ -560,7 +637,7 @@ function previewSelectedLogo() {
 
 function updateLogoSizeDisplay(value) {
     document.getElementById('logo_size_display').textContent = value + 'px';
-    
+
     // Update preview size
     const previewImg = document.getElementById('logo_preview_img');
     if (previewImg.style.display !== 'none') {
@@ -572,7 +649,7 @@ function updateLogoSizeDisplay(value) {
 
 function updateOpacityDisplay(value) {
     document.getElementById('opacity_display').textContent = value;
-    
+
     // Update preview opacity
     const previewImg = document.getElementById('logo_preview_img');
     if (previewImg.style.display !== 'none') {
@@ -583,10 +660,10 @@ function updateOpacityDisplay(value) {
 function testConnection(channelId) {
     const btn = event.target;
     const originalText = btn.innerHTML;
-    
+
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
     btn.disabled = true;
-    
+
     $.ajax({
         url: `/admin/channels/${channelId}/test-connection`,
         method: 'POST',

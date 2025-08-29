@@ -107,6 +107,20 @@
             <div class="col-md-4">
                 <div class="card card-info">
                     <div class="card-header">
+                        <!-- Info: Default/Publishing Queue (ScheduledPost/YouTube) -->
+                        <div class="alert alert-info">
+                            <h5 class="mb-1">📤 Publishing Queue (Default)</h5>
+                            <p class="mb-2">
+                                Các job đăng video lên kênh (ScheduledPost → YouTube/TikTok) chạy trên <strong>default queue</strong>.
+                                Hãy chạy worker mặc định song song với các worker khác:
+                            </p>
+                            <div class="bg-dark p-2 rounded mb-2"><code class="text-light small">php artisan queue:work --tries=3 --timeout=600 --sleep=5</code></div>
+                            <p class="mb-2">Hoặc chỉ định rõ queue mặc định:</p>
+                            <div class="bg-dark p-2 rounded mb-2"><code class="text-light small">php artisan queue:work --queue=default --tries=3 --timeout=600 --sleep=5</code></div>
+                            <p class="mb-0">Xử lý thủ công các bài pending (nếu cần):
+                                <code class="text-monospace">php artisan posts:process-scheduled --limit=10</code>
+                            </p>
+                        </div>
                         <h3 class="card-title">🕷️ Crawl Queue</h3>
                     </div>
                     <div class="card-body">

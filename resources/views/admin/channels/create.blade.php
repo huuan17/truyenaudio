@@ -289,22 +289,59 @@
                             <h6 class="text-primary mb-3">
                                 <i class="fab fa-tiktok mr-2"></i>TikTok API
                             </h6>
-                            
+
+                            <div class="form-group">
+                                <label for="tiktok_client_key">Client Key *</label>
+                                <input type="text" name="tiktok_client_key" id="tiktok_client_key" class="form-control"
+                                       placeholder="TikTok Client Key" value="{{ old('tiktok_client_key') }}" required>
+                                <small class="form-text text-muted">Client Key từ TikTok Developer Portal</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="tiktok_client_secret">Client Secret *</label>
+                                <input type="password" name="tiktok_client_secret" id="tiktok_client_secret" class="form-control"
+                                       placeholder="TikTok Client Secret" value="{{ old('tiktok_client_secret') }}" required>
+                                <small class="form-text text-muted">Client Secret từ TikTok Developer Portal</small>
+                            </div>
+
                             <div class="form-group">
                                 <label for="tiktok_access_token">Access Token</label>
-                                <input type="password" name="tiktok_access_token" id="tiktok_access_token" class="form-control" 
-                                       placeholder="TikTok Access Token" value="{{ old('tiktok_access_token') }}">
+                                <input type="password" name="tiktok_access_token" id="tiktok_access_token" class="form-control"
+                                       placeholder="TikTok Access Token" value="{{ old('tiktok_access_token') }}" readonly>
+                                <small class="form-text text-muted">Sẽ được tự động điền sau khi lấy token</small>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="tiktok_refresh_token">Refresh Token</label>
-                                <input type="password" name="tiktok_refresh_token" id="tiktok_refresh_token" class="form-control" 
-                                       placeholder="TikTok Refresh Token" value="{{ old('tiktok_refresh_token') }}">
+                                <input type="password" name="tiktok_refresh_token" id="tiktok_refresh_token" class="form-control"
+                                       placeholder="TikTok Refresh Token" value="{{ old('tiktok_refresh_token') }}" readonly>
+                                <small class="form-text text-muted">Sẽ được tự động điền sau khi lấy token</small>
                             </div>
-                            
+
+                            <div class="form-group">
+                                <div class="btn-group d-block" role="group">
+                                    <button type="button" id="get_tiktok_token_btn" class="btn btn-primary mr-2" onclick="getTikTokToken()">
+                                        <i class="fab fa-tiktok mr-2"></i>Lấy Access Token & Refresh Token
+                                    </button>
+                                    <button type="button" id="get_tiktok_channel_id_btn" class="btn btn-success" onclick="getTikTokChannelId()" disabled>
+                                        <i class="fas fa-id-card mr-2"></i>Lấy Channel ID
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted mt-2">
+                                    <strong>Bước 1:</strong> Lấy Access Token & Refresh Token từ TikTok<br>
+                                    <strong>Bước 2:</strong> Lấy Channel ID từ thông tin tài khoản
+                                </small>
+                            </div>
+
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle mr-2"></i>
-                                <strong>Hướng dẫn:</strong> Lấy token từ TikTok Developer Portal
+                                <strong>Hướng dẫn:</strong>
+                                <ol class="mb-0 mt-2">
+                                    <li>Nhập Client Key và Client Secret từ TikTok Developer Portal</li>
+                                    <li>Nhấn nút "Lấy Access Token & Refresh Token"</li>
+                                    <li>Đăng nhập TikTok và cấp quyền cho ứng dụng</li>
+                                    <li>Token sẽ được tự động điền vào form</li>
+                                </ol>
                             </div>
                         </div>
 
@@ -426,6 +463,208 @@ function previewSelectedLogo() {
         configSection.style.display = 'none';
     }
 }
+
+// TikTok OAuth functions
+function getTikTokToken() {
+    const clientKey = document.getElementById('tiktok_client_key').value;
+    const clientSecret = document.getElementById('tiktok_client_secret').value;
+
+    if (!clientKey || !clientSecret) {
+        alert('Vui lòng nhập Client Key và Client Secret trước');
+        return;
+    }
+
+    // Store form data in sessionStorage to restore after OAuth
+    const formData = new FormData(document.querySelector('form'));
+    const formObject = {};
+    for (let [key, value] of formData.entries()) {
+        formObject[key] = value;
+    }
+    sessionStorage.setItem('tiktok_channel_form_data', JSON.stringify(formObject));
+
+    // Create temporary channel data for OAuth
+    const tempChannelData = {
+        client_key: clientKey,
+        client_secret: clientSecret
+    };
+
+    // Start OAuth flow
+    const btn = document.getElementById('get_tiktok_token_btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang chuyển hướng...';
+
+    // Send request to start OAuth
+    fetch('{{ route("admin.channels.tiktok.oauth.start") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify(tempChannelData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Redirect to TikTok OAuth
+            window.location.href = data.auth_url;
+        } else {
+            alert('Lỗi: ' + data.error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fab fa-tiktok mr-2"></i>Lấy Access Token & Refresh Token';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Có lỗi xảy ra khi kết nối với TikTok');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fab fa-tiktok mr-2"></i>Lấy Access Token & Refresh Token';
+    });
+}
+
+// TikTok Channel ID function
+function getTikTokChannelId() {
+    const accessToken = document.getElementById('tiktok_access_token').value;
+    const clientKey = document.getElementById('tiktok_client_key').value;
+    const clientSecret = document.getElementById('tiktok_client_secret').value;
+
+    if (!accessToken) {
+        alert('Vui lòng lấy Access Token trước khi lấy Channel ID');
+        return;
+    }
+
+    if (!clientKey || !clientSecret) {
+        alert('Vui lòng nhập Client Key và Client Secret');
+        return;
+    }
+
+    const btn = document.getElementById('get_tiktok_channel_id_btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang lấy...';
+
+    // Send request to get channel info
+    fetch('{{ route("admin.channels.tiktok.get-channel-id") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+        },
+        body: JSON.stringify({
+            access_token: accessToken,
+            client_key: clientKey,
+            client_secret: clientSecret
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Fill in the channel info
+            document.getElementById('channel_id').value = data.channel_id;
+            document.getElementById('username').value = data.username;
+
+            // Show success message
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+            alertDiv.innerHTML = `
+                <i class="fas fa-check-circle mr-2"></i>
+                <strong>Thành công!</strong> Đã lấy được Channel ID: <strong>${data.channel_id}</strong>
+                ${data.username ? ` và Username: <strong>@${data.username}</strong>` : ''}
+                <button type="button" class="close" data-dismiss="alert">
+                    <span>&times;</span>
+                </button>
+            `;
+
+            // Insert after the button group
+            const buttonGroup = btn.closest('.form-group');
+            buttonGroup.parentNode.insertBefore(alertDiv, buttonGroup.nextSibling);
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check mr-2"></i>Đã lấy Channel ID';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-secondary');
+        } else {
+            alert('Lỗi khi lấy Channel ID: ' + data.error);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-id-card mr-2"></i>Lấy Channel ID';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Có lỗi xảy ra khi lấy Channel ID');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-id-card mr-2"></i>Lấy Channel ID';
+    });
+}
+
+// Restore form data after OAuth redirect
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if we have OAuth result in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthSuccess = urlParams.get('oauth_success');
+    const accessToken = urlParams.get('access_token');
+    const refreshToken = urlParams.get('refresh_token');
+
+    if (oauthSuccess === '1' && accessToken && refreshToken) {
+        // Fill in the tokens
+        document.getElementById('tiktok_access_token').value = accessToken;
+        document.getElementById('tiktok_refresh_token').value = refreshToken;
+
+        // Enable Channel ID button
+        const channelIdBtn = document.getElementById('get_tiktok_channel_id_btn');
+        if (channelIdBtn) {
+            channelIdBtn.disabled = false;
+        }
+
+        // Show success message
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show';
+        alertDiv.innerHTML = `
+            <i class="fas fa-check-circle mr-2"></i>
+            <strong>Thành công!</strong> Đã lấy được Access Token và Refresh Token từ TikTok.
+            Bây giờ bạn có thể lấy Channel ID.
+            <button type="button" class="close" data-dismiss="alert">
+                <span>&times;</span>
+            </button>
+        `;
+        document.querySelector('.card-body').insertBefore(alertDiv, document.querySelector('.card-body').firstChild);
+
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Restore form data if available
+    const savedFormData = sessionStorage.getItem('tiktok_channel_form_data');
+    if (savedFormData) {
+        const formObject = JSON.parse(savedFormData);
+        for (let [key, value] of Object.entries(formObject)) {
+            const input = document.querySelector(`[name="${key}"]`);
+            if (input && !input.readOnly) {
+                input.value = value;
+                if (input.type === 'radio' || input.type === 'checkbox') {
+                    input.checked = true;
+                }
+            }
+        }
+        sessionStorage.removeItem('tiktok_channel_form_data');
+    }
+
+    // Enable/disable Channel ID button based on access token
+    function checkTikTokTokens() {
+        const accessToken = document.getElementById('tiktok_access_token').value;
+        const channelIdBtn = document.getElementById('get_tiktok_channel_id_btn');
+
+        if (channelIdBtn) {
+            channelIdBtn.disabled = !accessToken;
+        }
+    }
+
+    // Monitor access token field changes
+    const accessTokenField = document.getElementById('tiktok_access_token');
+    if (accessTokenField) {
+        accessTokenField.addEventListener('input', checkTikTokTokens);
+        // Check initial state
+        checkTikTokTokens();
+    }
+});
 
 function updateLogoSizeDisplay(value) {
     document.getElementById('logo_size_display').textContent = value + 'px';

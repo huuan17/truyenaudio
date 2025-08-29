@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background hexagon -->
+  <polygon points="100,20 170,60 170,140 100,180 30,140 30,60" 
+           fill="url(#grad3)" stroke="#ffffff" stroke-width="4"/>
+  
+  <!-- Logo initials -->
+  <text x="100" y="115" font-family="Arial, sans-serif" font-size="48" font-weight="bold" 
+        text-anchor="middle" fill="#ffffff">YT</text>
+  
+  <!-- Decorative dots -->
+  <circle cx="100" cy="50" r="4" fill="#ffffff" opacity="0.7"/>
+  <circle cx="100" cy="150" r="4" fill="#ffffff" opacity="0.7"/>
+  <circle cx="70" cy="100" r="4" fill="#ffffff" opacity="0.7"/>
+  <circle cx="130" cy="100" r="4" fill="#ffffff" opacity="0.7"/>
+</svg>

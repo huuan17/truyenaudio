@@ -130,7 +130,7 @@
                     </div>
                     <div class="dropdown-divider"></div>
                     
-                    <a href="{{ route('admin.profile.edit') }}" class="dropdown-item">
+                    <a href="{{ route('admin.dashboard') }}" class="dropdown-item">
                         <i class="fas fa-user me-2"></i>
                         Hồ sơ cá nhân
                     </a>

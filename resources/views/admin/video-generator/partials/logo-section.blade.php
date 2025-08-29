@@ -36,105 +36,55 @@
             <div id="logo-library-section">
                 <div class="form-group">
                     <label for="logo_library">Chọn logo từ thư viện</label>
-                    <div class="row" id="logo-gallery">
-                        <!-- Logo items will be populated here -->
-                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                            <div class="logo-item" data-logo="logo1.png">
-                                <div class="card">
-                                    @if(file_exists(public_path('assets/logos/logo1.png')))
-                                        <img src="{{ asset('assets/logos/logo1.png') }}" class="card-img-top logo-preview" alt="Logo 1">
-                                    @else
-                                        <div class="card-img-top logo-preview d-flex align-items-center justify-content-center bg-light">
-                                            <small class="text-muted">Logo 1<br>Placeholder</small>
-                                        </div>
-                                    @endif
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Logo 1</small>
-                                    </div>
-                                </div>
-                            </div>
+
+                    <!-- Search and filter -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <input type="text" id="logo-search" class="form-control" placeholder="Tìm kiếm logo...">
                         </div>
-                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                            <div class="logo-item" data-logo="logo2.png">
-                                <div class="card">
-                                    @if(file_exists(public_path('assets/logos/logo2.png')))
-                                        <img src="{{ asset('assets/logos/logo2.png') }}" class="card-img-top logo-preview" alt="Logo 2">
-                                    @else
-                                        <div class="card-img-top logo-preview d-flex align-items-center justify-content-center bg-light">
-                                            <small class="text-muted">Logo 2<br>Placeholder</small>
-                                        </div>
-                                    @endif
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Logo 2</small>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="col-md-3">
+                            <select id="logo-filter" class="form-control">
+                                <option value="">Tất cả logo</option>
+                                <option value="png">PNG</option>
+                                <option value="svg">SVG</option>
+                                <option value="jpg">JPG</option>
+                            </select>
                         </div>
-                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                            <div class="logo-item" data-logo="logo3.png">
-                                <div class="card">
-                                    @if(file_exists(public_path('assets/logos/logo3.png')))
-                                        <img src="{{ asset('assets/logos/logo3.png') }}" class="card-img-top logo-preview" alt="Logo 3">
-                                    @else
-                                        <div class="card-img-top logo-preview d-flex align-items-center justify-content-center bg-light">
-                                            <small class="text-muted">Logo 3<br>Placeholder</small>
-                                        </div>
-                                    @endif
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Logo 3</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                            <div class="logo-item" data-logo="logo4.png">
-                                <div class="card">
-                                    @if(file_exists(public_path('assets/logos/logo4.png')))
-                                        <img src="{{ asset('assets/logos/logo4.png') }}" class="card-img-top logo-preview" alt="Logo 4">
-                                    @else
-                                        <div class="card-img-top logo-preview d-flex align-items-center justify-content-center bg-light">
-                                            <small class="text-muted">Logo 4<br>Placeholder</small>
-                                        </div>
-                                    @endif
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Logo 4</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                            <div class="logo-item" data-logo="watermark1.png">
-                                <div class="card">
-                                    @if(file_exists(public_path('assets/logos/watermark1.png')))
-                                        <img src="{{ asset('assets/logos/watermark1.png') }}" class="card-img-top logo-preview" alt="Watermark 1">
-                                    @else
-                                        <div class="card-img-top logo-preview d-flex align-items-center justify-content-center bg-light">
-                                            <small class="text-muted">Watermark 1<br>Placeholder</small>
-                                        </div>
-                                    @endif
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Watermark 1</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-3 col-sm-4 col-6 mb-3">
-                            <div class="logo-item" data-logo="watermark2.png">
-                                <div class="card">
-                                    @if(file_exists(public_path('assets/logos/watermark2.png')))
-                                        <img src="{{ asset('assets/logos/watermark2.png') }}" class="card-img-top logo-preview" alt="Watermark 2">
-                                    @else
-                                        <div class="card-img-top logo-preview d-flex align-items-center justify-content-center bg-light">
-                                            <small class="text-muted">Watermark 2<br>Placeholder</small>
-                                        </div>
-                                    @endif
-                                    <div class="card-body p-2 text-center">
-                                        <small class="text-muted">Watermark 2</small>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-primary btn-block" onclick="searchLogoLibrary()">
+                                <i class="fas fa-search mr-1"></i>Tìm
+                            </button>
                         </div>
                     </div>
+
+                    <!-- Logo results -->
+                    <div id="logo-results" class="logo-results" style="max-height: 400px; overflow-y: auto; border: 1px solid #e3e6f0; border-radius: 0.35rem; padding: 1rem;">
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-search fa-2x mb-2"></i>
+                            <p>Nhấn "Tìm" để hiển thị danh sách logo</p>
+                        </div>
+                    </div>
+
+                    <!-- Selected logo info -->
+                    <div id="selected-logo-info" class="selected-logo-info mt-2" style="display: none;">
+                        <div class="alert alert-success">
+                            <strong>Đã chọn:</strong> <span id="selected-logo-name"></span>
+                            <button type="button" class="btn btn-sm btn-outline-danger float-right" onclick="clearSelectedLogo()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Add new logo button -->
+                    <div class="text-center mt-3">
+                        <a href="{{ route('admin.logos.index') }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                            <i class="fas fa-plus mr-1"></i>Quản lý logo
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary btn-sm ml-2" onclick="searchLogoLibrary()">
+                            <i class="fas fa-sync mr-1"></i>Tải lại
+                        </button>
+                    </div>
+
                     <input type="hidden" name="selected_logo" id="selected_logo" value="">
                 </div>
             </div>

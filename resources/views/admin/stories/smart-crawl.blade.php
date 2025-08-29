@@ -156,7 +156,8 @@
                                 
                                 <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST">
                                     @csrf
-                                    <button type="submit" class="btn btn-success btn-block" 
+                                    <input type="hidden" name="confirm" value="1">
+                                    <button type="submit" class="btn btn-success btn-block"
                                             onclick="return confirm('Bạn có chắc muốn crawl {{ $missing_count }} chương thiếu?')">
                                         <i class="fas fa-download"></i> Crawl {{ $missing_count }} chương thiếu
                                     </button>
@@ -170,7 +171,8 @@
                                 
                                 <form action="{{ route('admin.stories.smart-crawl', $story) }}" method="POST">
                                     @csrf
-                                    <button type="submit" class="btn btn-outline-success btn-block" 
+                                    <input type="hidden" name="confirm" value="1">
+                                    <button type="submit" class="btn btn-outline-success btn-block"
                                             onclick="return confirm('Bạn có chắc muốn crawl lại tất cả các chương?')">
                                         <i class="fas fa-redo"></i> Crawl lại tất cả
                                     </button>

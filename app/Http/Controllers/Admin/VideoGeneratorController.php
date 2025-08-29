@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\Channel;
 use App\Services\VideoGenerationService;
+use App\Services\VideoPublishingService;
 use App\Models\VideoGenerationTask;
 use App\Models\VideoTemplate;
 use App\Models\AudioLibrary;
@@ -28,7 +30,7 @@ class VideoGeneratorController extends Controller
         // Get existing videos from both platforms
         $tiktokVideos = $this->getExistingVideos('tiktok_videos');
         $youtubeVideos = $this->getExistingVideos('youtube_videos');
-        
+
         // Voice options (shared between platforms)
         $voices = [
             'hn_female_ngochuyen_full_48k-fhg' => 'Ngọc Huyền (Nữ - Hà Nội)',
@@ -46,18 +48,18 @@ class VideoGeneratorController extends Controller
             ->where('platform', 'tiktok')
             ->select('id', 'name', 'username', 'logo_config', 'default_privacy', 'default_tags', 'default_category')
             ->get();
-            
+
         $youtubeChannels = Channel::active()
             ->where('platform', 'youtube')
             ->select('id', 'name', 'username', 'logo_config', 'default_privacy', 'default_tags', 'default_category')
             ->get();
 
         return view('admin.video-generator.index', compact(
-            'tiktokVideos', 
-            'youtubeVideos', 
-            'voices', 
-            'logos', 
-            'tiktokChannels', 
+            'tiktokVideos',
+            'youtubeVideos',
+            'voices',
+            'logos',
+            'tiktokChannels',
             'youtubeChannels'
         ));
     }
@@ -67,6 +69,46 @@ class VideoGeneratorController extends Controller
      */
     public function generate(Request $request)
     {
+        // Debug form submission
+        Log::info('🚀 VIDEO GENERATION: Form submitted', [
+            'all_input_keys' => array_keys($request->all()),
+            'subtitle_options' => [
+                'subtitle_color' => $request->input('subtitle_color'),
+                'subtitle_position' => $request->input('subtitle_position'),
+                'subtitle_background' => $request->input('subtitle_background'),
+                'subtitle_size' => $request->input('subtitle_size'),
+            ],
+            'image_order_mapping' => $request->input('image_order_mapping'),
+            'library_audio_id' => $request->input('library_audio_id'),
+            'slide_duration' => $request->input('slide_duration'),
+            'slide_transition' => $request->input('slide_transition'),
+        ]);
+
+        try {
+            // Set longer execution time for video generation
+            set_time_limit(300); // 5 minutes
+
+            // 🔥 DEBUG: Log all input data
+            Log::info('🔥🔥🔥 VIDEO GENERATOR DEBUG: Raw request data', [
+                'all_input' => $request->all(),
+                'files' => $request->allFiles(),
+                'platform' => $request->input('platform'),
+                'media_type' => $request->input('media_type'),
+                'audio_source' => $request->input('audio_source'),
+                'library_audio_id' => $request->input('library_audio_id'),
+                'library_audio_id_type' => gettype($request->input('library_audio_id')),
+                'library_audio_id_empty' => empty($request->input('library_audio_id')),
+                'slide_duration' => $request->input('slide_duration'),
+                'slide_transition' => $request->input('slide_transition'),
+                'output_name' => $request->input('output_name'),
+                'tts_text' => $request->input('tts_text'),
+                'images_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
+                'has_audio_file' => $request->hasFile('audio_file'),
+                'request_method' => $request->method(),
+                'request_url' => $request->url(),
+                'user_agent' => $request->userAgent()
+            ]);
+
         $platform = $request->input('platform');
 
         // Validate platform
@@ -74,11 +116,13 @@ class VideoGeneratorController extends Controller
             return back()->with('error', 'Platform không hợp lệ')->withInput();
         }
 
-        // Platform-specific validation
-        $validationRules = $this->getValidationRules($platform, 'single');
-        $request->validate($validationRules);
+            // Auto-fix common validation issues
+            $this->autoFixValidationIssues($request);
 
-        try {
+            // Platform-specific validation
+            $validationRules = $this->getValidationRules($platform, 'single');
+            $request->validate($validationRules);
+
             // Process all video settings
             $videoSettings = $this->processVideoSettings($request);
 
@@ -132,73 +176,26 @@ class VideoGeneratorController extends Controller
     }
 
     /**
-     * Generate batch videos for any platform
+     * Auto-fix common validation issues
      */
-    public function generateBatch(Request $request)
+    private function autoFixValidationIssues(Request $request)
     {
-        $platform = $request->input('platform');
-
-        // Validate platform
-        if (!in_array($platform, ['tiktok', 'youtube', 'both', 'none'])) {
-            return back()->with('error', 'Platform không hợp lệ')->withInput();
+        // Fix TTS validation: if audio_source is tts but no tts_text, switch to none
+        if ($request->input('audio_source') === 'tts' && empty($request->input('tts_text'))) {
+            $request->merge(['audio_source' => 'none']);
+            Log::info('🔧 AUTO-FIX: Changed audio_source from tts to none (no tts_text provided)');
         }
 
-        // Platform-specific validation
-        $validationRules = $this->getValidationRules($platform, 'batch');
-        $request->validate($validationRules);
+        // Fix library audio: if audio_source is library but no library_audio_id, switch to none
+        if ($request->input('audio_source') === 'library' && empty($request->input('library_audio_id'))) {
+            $request->merge(['audio_source' => 'none']);
+            Log::info('🔧 AUTO-FIX: Changed audio_source from library to none (no library_audio_id provided)');
+        }
 
-        try {
-            // Process all video settings for batch
-            $videoSettings = $this->processVideoSettings($request);
-
-            // Add processed settings to request
-            $request->merge(['processed_settings' => $videoSettings]);
-
-            $videoService = new VideoGenerationService();
-
-            if ($platform === 'both') {
-                // Generate batch for both platforms
-                $tiktokBatch = $videoService->queueBatchVideos('tiktok', $request, auth()->id());
-                $youtubeBatch = $videoService->queueBatchVideos('youtube', $request, auth()->id());
-
-                $totalCount = $tiktokBatch['total_count'] + $youtubeBatch['total_count'];
-
-                return redirect()->route('admin.video-queue.index')->with('success',
-                    "Đã thêm {$totalCount} video cho cả TikTok và YouTube vào hàng đợi xử lý! " .
-                    "TikTok Batch ID: {$tiktokBatch['batch_id']}, YouTube Batch ID: {$youtubeBatch['batch_id']}. " .
-                    "Các video sẽ được xử lý tuần tự để tránh quá tải máy chủ. " .
-                    "Bạn có thể theo dõi tiến trình tại đây."
-                );
-            } elseif ($platform === 'none') {
-                // Generate batch videos without channel publishing
-                $batchResult = $videoService->queueBatchVideos('none', $request, auth()->id());
-
-                // Redirect to video management instead of queue monitor
-                return redirect()->route('admin.videos.index')->with('success',
-                    "Đã thêm {$batchResult['total_count']} video vào hàng đợi xử lý! " .
-                    "Batch ID: {$batchResult['batch_id']}. " .
-                    "Các video sẽ được xử lý tuần tự để tránh quá tải máy chủ. " .
-                    "Video sẽ được lưu trữ mà không đăng lên kênh nào. " .
-                    "Bạn có thể theo dõi tiến trình tại Video Queue hoặc xem video đã tạo tại đây."
-                );
-            } else {
-                // Generate batch for single platform
-                $batchResult = $videoService->queueBatchVideos($platform, $request, auth()->id());
-
-                $platformName = $platform === 'tiktok' ? 'TikTok' : 'YouTube';
-
-                // Redirect to video queue monitor with success message
-                return redirect()->route('admin.video-queue.index')->with('success',
-                    "Đã thêm {$batchResult['total_count']} video {$platformName} vào hàng đợi xử lý! " .
-                    "Batch ID: {$batchResult['batch_id']}. " .
-                    "Các video sẽ được xử lý tuần tự để tránh quá tải máy chủ. " .
-                    "Bạn có thể theo dõi tiến trình tại đây."
-                );
-            }
-
-        } catch (\Exception $e) {
-            return back()->with('error', 'Có lỗi xảy ra: ' . $e->getMessage())
-                ->withInput();
+        // Fix upload audio: if audio_source is upload but no audio file, switch to none
+        if ($request->input('audio_source') === 'upload' && !$request->hasFile('audio_file')) {
+            $request->merge(['audio_source' => 'none']);
+            Log::info('🔧 AUTO-FIX: Changed audio_source from upload to none (no audio_file provided)');
         }
     }
 
@@ -217,6 +214,10 @@ class VideoGeneratorController extends Controller
             'background_video' => 'nullable|file|mimes:mp4,avi,mov|max:512000', // 500MB
             'mixed_media' => 'nullable|array|max:30',
             'mixed_media.*' => 'file|mimes:jpg,jpeg,png,gif,mp4,avi,mov|max:512000', // 500MB
+            'mixed_images' => 'nullable|array|max:20',
+            'mixed_images.*' => 'file|mimes:jpg,jpeg,png,gif|max:51200', // 50MB per image
+            'mixed_videos' => 'nullable|array|max:10',
+            'mixed_videos.*' => 'file|mimes:mp4,avi,mov|max:512000', // 500MB per video
             'remove_video_audio' => 'nullable|boolean',
 
             // Individual image settings
@@ -226,9 +227,24 @@ class VideoGeneratorController extends Controller
 
             // Mixed mode settings
             'mixed_mode' => 'nullable|in:sequence,overlay,split',
+            'sequence_strategy' => 'nullable|in:even_distribution,alternating',
+            'image_display_duration' => 'nullable|numeric|between:0.5,10',
+            'image_distribution_mode' => 'nullable|in:auto_even,custom_timing',
+            'image_timings' => 'nullable|array',
+            'image_timings.*' => 'nullable|numeric|between:0,300',
             'sequence_image_duration' => 'nullable|numeric|between:1,30',
             'sequence_video_duration' => 'nullable|in:full,5,10,15,custom',
             'custom_video_seconds' => 'nullable|numeric|between:1,300',
+            'mixed_image_duration' => 'nullable|numeric|between:0.5,30',
+            'mixed_image_transition' => 'nullable|in:none,fade,slide,zoom,dissolve',
+            'mixed_content_behavior' => 'nullable|in:loop,hold_last,black_screen',
+            'mixed_auto_adjust_images' => 'nullable|boolean',
+            'mixed_image_durations' => 'nullable|array',
+            'mixed_image_durations.*' => 'nullable|numeric|between:0.5,30',
+            'mixed_video_durations' => 'nullable|array',
+            'mixed_video_durations.*' => 'nullable|in:full,5,10,15,30,custom',
+            'mixed_video_custom_durations' => 'nullable|array',
+            'mixed_video_custom_durations.*' => 'nullable|numeric|between:1,300',
 
             // Overlay settings
             'overlay_position' => 'nullable|in:top-left,top-right,top-center,bottom-left,bottom-right,bottom-center,center',
@@ -245,8 +261,8 @@ class VideoGeneratorController extends Controller
             'split_ratio' => 'nullable|in:50:50,60:40,70:30,80:20',
 
             // Audio content rules
-            'audio_source' => 'nullable|in:tts,upload,library,none',
-            'tts_text' => 'nullable|required_if:audio_source,tts|string|min:10|max:5000',
+            'audio_source' => 'nullable|in:tts,upload,library,none,video_original',
+            'tts_text' => 'nullable|required_if:audio_source,tts|string|min:1|max:5000',
             'tts_voice' => 'nullable|string',
             'tts_speed' => 'nullable|numeric|between:0.5,2.0',
             'tts_volume' => 'nullable|numeric|between:0.5,2.0',
@@ -324,6 +340,8 @@ class VideoGeneratorController extends Controller
 
             // Channel and scheduling
             'channel_id' => 'nullable|exists:channels,id',
+            'tiktok_channel_id' => 'nullable|exists:channels,id',
+            'youtube_channel_id' => 'nullable|exists:channels,id',
             'schedule_post' => 'nullable|boolean',
             'scheduled_date' => 'nullable|required_if:schedule_post,1|date',
             'scheduled_time' => 'nullable|required_if:schedule_post,1|date_format:H:i',
@@ -481,7 +499,7 @@ class VideoGeneratorController extends Controller
     private function getExistingVideos($directory)
     {
         $videoDir = storage_path("app/{$directory}");
-        
+
         if (!File::isDirectory($videoDir)) {
             return [];
         }
@@ -545,11 +563,20 @@ class VideoGeneratorController extends Controller
         $imageSettings = [];
 
         if ($request->has('images')) {
+            // Get arrays from form
+            $imageDurations = $request->input('image_durations', []);
+            $imageTransitions = $request->input('image_transitions', []);
+            $transitionDuration = $request->input('transition_duration', 0.5);
+
+            // Default values
+            $defaultDuration = $request->input('default_image_duration', 3);
+            $defaultTransition = $request->input('default_transition_effect', 'slide');
+
             foreach ($request->file('images') as $index => $image) {
                 $imageSettings[$index] = [
-                    'duration' => $request->input("images.{$index}.duration", $request->input('default_image_duration', 3)),
-                    'transition' => $request->input("images.{$index}.transition", $request->input('default_transition_effect', 'slide')),
-                    'transition_duration' => $request->input("images.{$index}.transition_duration", $request->input('transition_duration', 0.5)),
+                    'duration' => isset($imageDurations[$index]) ? $imageDurations[$index] : $defaultDuration,
+                    'transition' => isset($imageTransitions[$index]) ? $imageTransitions[$index] : $defaultTransition,
+                    'transition_duration' => $transitionDuration,
                 ];
             }
         }
@@ -599,11 +626,22 @@ class VideoGeneratorController extends Controller
         $mixedMode = $request->input('mixed_mode', 'sequence');
         $settings = ['mode' => $mixedMode];
 
+        // Common mixed media settings
+        $settings['image_duration'] = $request->input('mixed_image_duration', 3);
+        $settings['image_transition'] = $request->input('mixed_image_transition', 'fade');
+        $settings['content_behavior'] = $request->input('mixed_content_behavior', 'loop');
+        $settings['auto_adjust_images'] = $request->boolean('mixed_auto_adjust_images', true);
+
+        // Individual durations
+        $settings['image_durations'] = $request->input('mixed_image_durations', []);
+        $settings['video_durations'] = $request->input('mixed_video_durations', []);
+        $settings['video_custom_durations'] = $request->input('mixed_video_custom_durations', []);
+
         switch ($mixedMode) {
             case 'sequence':
-                $settings['image_duration'] = $request->input('sequence_image_duration', 4);
-                $settings['video_duration'] = $request->input('sequence_video_duration', 'full');
-                if ($settings['video_duration'] === 'custom') {
+                $settings['sequence_image_duration'] = $request->input('sequence_image_duration', 4);
+                $settings['sequence_video_duration'] = $request->input('sequence_video_duration', 'full');
+                if ($settings['sequence_video_duration'] === 'custom') {
                     $settings['custom_video_seconds'] = $request->input('custom_video_seconds', 8);
                 }
                 break;
@@ -884,16 +922,43 @@ class VideoGeneratorController extends Controller
                 ];
             }
 
-            if ($mediaType === 'mixed' && $request->hasFile('mixed_media')) {
-                foreach ($request->file('mixed_media') as $index => $file) {
-                    $results['mixed'][$index] = [
-                        'valid' => $file->isValid(),
-                        'size' => $this->formatFileSize($file->getSize()),
-                        'type' => $file->getMimeType(),
-                        'name' => $file->getClientOriginalName(),
-                        'is_image' => str_starts_with($file->getMimeType(), 'image/'),
-                        'is_video' => str_starts_with($file->getMimeType(), 'video/')
-                    ];
+            if ($mediaType === 'mixed') {
+                // Handle legacy mixed_media upload
+                if ($request->hasFile('mixed_media')) {
+                    foreach ($request->file('mixed_media') as $index => $file) {
+                        $results['mixed'][$index] = [
+                            'valid' => $file->isValid(),
+                            'size' => $this->formatFileSize($file->getSize()),
+                            'type' => $file->getMimeType(),
+                            'name' => $file->getClientOriginalName(),
+                            'is_image' => str_starts_with($file->getMimeType(), 'image/'),
+                            'is_video' => str_starts_with($file->getMimeType(), 'video/')
+                        ];
+                    }
+                }
+
+                // Handle separate mixed_images upload
+                if ($request->hasFile('mixed_images')) {
+                    foreach ($request->file('mixed_images') as $index => $image) {
+                        $results['mixed_images'][$index] = [
+                            'valid' => $image->isValid(),
+                            'size' => $this->formatFileSize($image->getSize()),
+                            'type' => $image->getMimeType(),
+                            'name' => $image->getClientOriginalName()
+                        ];
+                    }
+                }
+
+                // Handle separate mixed_videos upload
+                if ($request->hasFile('mixed_videos')) {
+                    foreach ($request->file('mixed_videos') as $index => $video) {
+                        $results['mixed_videos'][$index] = [
+                            'valid' => $video->isValid(),
+                            'size' => $this->formatFileSize($video->getSize()),
+                            'type' => $video->getMimeType(),
+                            'name' => $video->getClientOriginalName()
+                        ];
+                    }
                 }
             }
 
@@ -999,8 +1064,22 @@ class VideoGeneratorController extends Controller
             abort(404, 'Platform không hợp lệ');
         }
 
-        $directory = $platform === 'tiktok' ? 'tiktok_videos' : 'youtube_videos';
-        $filePath = storage_path("app/{$directory}/{$filename}");
+        // Use consistent path with video generation
+        $filePath = storage_path("app/videos/{$filename}");
+
+        // Fallback to old platform-specific directories for backward compatibility
+        if (!File::exists($filePath)) {
+            $directory = $platform === 'tiktok' ? 'tiktok_videos' : 'youtube_videos';
+            $filePath = storage_path("app/{$directory}/{$filename}");
+        }
+
+        Log::info('VIDEO DOWNLOAD: Attempting download', [
+            'platform' => $platform,
+            'filename' => $filename,
+            'primary_path' => storage_path("app/videos/{$filename}"),
+            'fallback_path' => storage_path("app/{$directory}/{$filename}"),
+            'file_exists' => File::exists($filePath)
+        ]);
 
         if (!File::exists($filePath)) {
             abort(404, 'File không tồn tại');
@@ -1227,6 +1306,316 @@ class VideoGeneratorController extends Controller
     }
 
     /**
+     * Generate batch videos from template
+     */
+    public function generateBatchFromTemplate(Request $request)
+    {
+        $logger = new \App\Services\CustomLoggerService();
+
+        try {
+            $logger->logInfo('video-template-batch', 'Starting batch template video generation', [
+                'template_id' => $request->template_id,
+                'user_id' => auth()->id(),
+                'batch_count' => count($request->input('batch_videos', []))
+            ]);
+
+            // Validate basic request
+            $request->validate([
+                'template_id' => 'required|exists:video_templates,id',
+                'batch_videos' => 'required|array|min:1|max:20',
+                'batch_videos.*.video_name' => 'required|string|max:255',
+                'batch_videos.*.inputs' => 'nullable|array',
+                'batch_background_audio_id' => 'nullable|exists:audio_libraries,id',
+                'batch_channel_id' => 'nullable|exists:channels,id'
+            ]);
+
+            $template = VideoTemplate::findOrFail($request->template_id);
+            $batchVideos = $request->input('batch_videos', []);
+            $results = [];
+            $errors = [];
+
+            $logger->logInfo('video-template-batch', 'Template loaded, processing batch', [
+                'template_name' => $template->name,
+                'video_count' => count($batchVideos)
+            ]);
+
+            // Process each video in the batch
+            foreach ($batchVideos as $index => $videoData) {
+                try {
+                    $logger->logInfo('video-template-batch', "Processing video {$index}", [
+                        'video_name' => $videoData['video_name']
+                    ]);
+
+                    // Create individual request for this video
+                    $individualRequest = $this->createIndividualRequestFromBatch($request, $videoData, $template, $index);
+
+
+	                    // Debug: what inputs/files does the individual request carry?
+	                    try {
+	                        $dbgLogger = new \App\Services\CustomLoggerService();
+	                        $dbgInputs = $individualRequest->input('inputs', []);
+	                        $dbgFiles = $individualRequest->files->get('inputs', []);
+	                        $dbgLogger->logDebug('video-template-batch', 'Pre-validate individual payload', [
+	                            'index' => $index,
+	                            'video_name' => $videoData['video_name'] ?? null,
+	                            'input_keys' => is_array($dbgInputs) ? array_keys($dbgInputs) : [],
+	                            'file_keys' => is_array($dbgFiles) ? array_keys($dbgFiles) : [],
+	                            'has_file_titktok_1_anh' => is_array($dbgFiles) && array_key_exists('titktok_1_anh', $dbgFiles),
+	                        ]);
+	                    } catch (\Throwable $e) {}
+
+                    // Validate template inputs for this video
+                    $this->validateTemplateInputs($individualRequest, $template);
+
+                    // Merge template data
+                    $mergedRequest = $this->mergeTemplateData($individualRequest, $template);
+
+                    // Generate video
+                    $result = $this->generate($mergedRequest);
+
+                    if ($result->getStatusCode() === 302) {
+                        $results[] = [
+                            'index' => $index,
+                            'video_name' => $videoData['video_name'],
+                            'status' => 'success',
+                            'message' => 'Video đã được tạo thành công'
+                        ];
+
+                        $logger->logInfo('video-template-batch', "Video {$index} generated successfully", [
+                            'video_name' => $videoData['video_name']
+                        ]);
+                    } else {
+                        throw new \Exception('Video generation failed with status: ' . $result->getStatusCode());
+                    }
+
+                } catch (\Exception $e) {
+                    $errors[] = [
+                        'index' => $index,
+                        'video_name' => $videoData['video_name'] ?? "Video {$index}",
+                        'error' => $e->getMessage()
+                    ];
+
+                    $logger->logError('video-template-batch', "Failed to generate video {$index}", [
+                        'video_name' => $videoData['video_name'] ?? "Video {$index}",
+                        'error' => $e->getMessage()
+                    ], $e);
+                }
+            }
+
+            // Prepare response message
+            $successCount = count($results);
+            $errorCount = count($errors);
+            $totalCount = count($batchVideos);
+
+            if ($successCount === $totalCount) {
+                $message = "Tất cả {$totalCount} video đã được tạo thành công!";
+                $alertType = 'success';
+            } elseif ($successCount > 0) {
+                $message = "Đã tạo thành công {$successCount}/{$totalCount} video. {$errorCount} video gặp lỗi.";
+                $alertType = 'warning';
+            } else {
+                $message = "Không thể tạo video nào. Vui lòng kiểm tra lại dữ liệu.";
+                $alertType = 'error';
+            }
+
+            $logger->logInfo('video-template-batch', 'Batch processing completed', [
+                'total_videos' => $totalCount,
+                'successful' => $successCount,
+                'failed' => $errorCount
+            ]);
+
+            return back()->with($alertType, $message)
+                         ->with('batch_results', $results)
+                         ->with('batch_errors', $errors);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $logger->logError('video-template-batch', 'Validation failed', [
+                'template_id' => $request->template_id,
+                'errors' => $e->errors()
+            ], $e);
+
+            return back()->withErrors($e->errors())->withInput();
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            $logger->logError('video-template-batch', 'Template not found', [
+                'template_id' => $request->template_id
+            ], $e);
+
+            return back()->with('error', 'Template không tồn tại hoặc đã bị xóa.')->withInput();
+
+        } catch (\Exception $e) {
+            $logger->logError('video-template-batch', 'Unexpected error during batch generation', [
+                'template_id' => $request->template_id,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine()
+            ], $e);
+
+            return back()->with('error', 'Có lỗi xảy ra khi tạo batch video: ' . $e->getMessage())->withInput();
+        }
+    }
+
+    /**
+     * Create individual request from batch data
+     */
+    private function createIndividualRequestFromBatch(Request $batchRequest, array $videoData, VideoTemplate $template, ?int $videoIndex = null)
+    {
+        // Create new request with individual video data
+        $requestData = [
+            'template_id' => $batchRequest->template_id,
+            'video_name' => $videoData['video_name'],
+            'inputs' => $videoData['inputs'] ?? [],
+            'background_audio_id' => $batchRequest->batch_background_audio_id,
+            'channel_id' => $batchRequest->batch_channel_id
+        ];
+
+        // Create new request instance
+        $individualRequest = new Request($requestData);
+
+        // Handle file uploads for this specific video
+        $batchFiles = $batchRequest->file('batch_videos');
+        if (is_array($batchFiles)) {
+
+            // Prefer the explicit index from the loop; fall back to searching by value
+            $effectiveIndex = $videoIndex;
+            if ($effectiveIndex === null) {
+                $searched = array_search($videoData, $batchRequest->input('batch_videos', []));
+                if ($searched !== false) {
+                    $effectiveIndex = $searched;
+                }
+            }
+
+            if ($effectiveIndex !== null && isset($batchFiles[$effectiveIndex]['inputs'])) {
+                $individualFiles = [];
+                foreach ($batchFiles[$effectiveIndex]['inputs'] as $inputName => $files) {
+                    $individualFiles[$inputName] = $files;
+                }
+                // Attach files for this video's inputs
+                $individualRequest->files->set('inputs', $individualFiles);
+
+                // Ensure array presence for multi-file (images) inputs so 'required|array' passes
+                try {
+                    $templateInputs = array_merge($template->required_inputs ?? [], $template->optional_inputs ?? []);
+                    $multiImageNames = [];
+                    foreach ($templateInputs as $tplInput) {
+                        if (($tplInput['type'] ?? null) === 'images' && isset($tplInput['name'])) {
+                            $multiImageNames[] = $tplInput['name'];
+                        }
+                    }
+
+                    $currentInputs = $individualRequest->input('inputs', []);
+                    foreach ($individualFiles as $name => $files) {
+                        if (in_array($name, $multiImageNames, true)) {
+                            if (!array_key_exists($name, $currentInputs)) {
+                                // Add placeholder array entries matching file count
+                                $placeholders = [];
+                                if (is_array($files)) {
+                                    $placeholders = array_fill(0, count($files), '__uploaded__');
+                                } else {
+                                    // Single file provided where template expects multiple; still set one placeholder
+                                    $placeholders = ['__uploaded__'];
+                                }
+                                $currentInputs[$name] = $placeholders;
+                            }
+                        }
+                    }
+                    if (!empty($currentInputs)) {
+                        $individualRequest->merge(['inputs' => $currentInputs]);
+                    }
+                } catch (\Throwable $e) {
+                    // Fail-safe: do not block if placeholder merge fails
+                }
+
+            // Normalize keys: accept both spaces and underscores variants matching template names
+
+        // Debug logs for batch: confirm inputs/files are attached correctly
+        try {
+            $logger = new \App\Services\CustomLoggerService();
+            $inputsBag = $individualRequest->input('inputs', []);
+            $filesBag = $individualRequest->files->get('inputs', []);
+
+            $checkName = 'titktok_1_anh';
+            $inFiles = is_array($filesBag) && array_key_exists($checkName, $filesBag);
+            $fileInfo = null;
+            if ($inFiles) {
+                $f = $filesBag[$checkName];
+                if (is_array($f)) {
+                    $names = [];
+                    foreach ($f as $ff) {
+                        $names[] = method_exists($ff, 'getClientOriginalName') ? $ff->getClientOriginalName() : null;
+                    }
+                    $fileInfo = [
+                        'count' => count($f),
+                        'names' => $names,
+                    ];
+                } else {
+                    $fileInfo = [
+                        'single' => method_exists($f, 'getClientOriginalName') ? $f->getClientOriginalName() : null,
+                    ];
+                }
+            }
+
+            $logger->logDebug('video-template-batch', 'Individual request prepared (batch)', [
+                'video_index_param' => $videoIndex,
+                'effective_index' => isset($effectiveIndex) ? $effectiveIndex : null,
+                'input_keys' => is_array($inputsBag) ? array_keys($inputsBag) : [],
+                'file_keys' => is_array($filesBag) ? array_keys($filesBag) : [],
+                'specific_check' => [
+                    'name' => $checkName,
+                    'in_input' => is_array($inputsBag) && array_key_exists($checkName, $inputsBag),
+                    'in_files' => $inFiles,
+                    'file_info' => $fileInfo,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            // ignore logging failure
+        }
+
+            try {
+                $allInputs = array_merge($template->required_inputs ?? [], $template->optional_inputs ?? []);
+                $inputsBag = $individualRequest->input('inputs', []);
+                $filesBag = $individualRequest->files->get('inputs', []);
+
+                foreach ($allInputs as $inp) {
+                    if (!isset($inp['name'])) continue;
+                    $name = $inp['name'];
+                    $spaceVariant = str_replace('_', ' ', $name);
+                    $underscoreVariant = str_replace(' ', '_', $name);
+
+                    // Map from space variant to canonical name
+                    if (!array_key_exists($name, $inputsBag) && array_key_exists($spaceVariant, $inputsBag)) {
+                        $inputsBag[$name] = $inputsBag[$spaceVariant];
+                    }
+                    if (!array_key_exists($name, $filesBag) && array_key_exists($spaceVariant, $filesBag)) {
+                        $filesBag[$name] = $filesBag[$spaceVariant];
+                    }
+
+                    // Map from underscore variant to canonical name (handles case template has spaces)
+                    if (!array_key_exists($name, $inputsBag) && array_key_exists($underscoreVariant, $inputsBag)) {
+                        $inputsBag[$name] = $inputsBag[$underscoreVariant];
+                    }
+                    if (!array_key_exists($name, $filesBag) && array_key_exists($underscoreVariant, $filesBag)) {
+                        $filesBag[$name] = $filesBag[$underscoreVariant];
+                    }
+                }
+
+                if (!empty($inputsBag)) {
+                    $individualRequest->merge(['inputs' => $inputsBag]);
+                }
+                if (!empty($filesBag)) {
+                    $individualRequest->files->set('inputs', $filesBag);
+                }
+            } catch (\Throwable $e) {
+                // No-op if normalization fails
+            }
+
+            }
+        }
+
+        return $individualRequest;
+    }
+
+    /**
      * Validate template inputs
      */
     private function validateTemplateInputs(Request $request, VideoTemplate $template)
@@ -1254,7 +1643,8 @@ class VideoGeneratorController extends Controller
                         $rules[$fieldName] = 'required|file|mimes:jpg,jpeg,png,gif|max:51200'; // 50MB
                         break;
                     case 'images':
-                        $rules[$fieldName] = 'required|array';
+                        // In batch mode, rely on presence of uploaded files; array() is not required for Validator to see file array
+                        $rules[$fieldName] = 'required';
                         $rules[$fieldName . '.*'] = 'file|mimes:jpg,jpeg,png,gif|max:51200'; // 50MB
                         break;
                     case 'video':
