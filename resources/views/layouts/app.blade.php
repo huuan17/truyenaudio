@@ -838,6 +838,13 @@
                 </a>
               </li>
               <li class="nav-item">
+                <a href="{{ route('admin.help.show', 'social-media-integration') }}" class="nav-link {{ request()->routeIs('admin.help.show') && request()->route('section') === 'social-media-integration' ? 'active' : '' }}">
+                  <i class="fas fa-share-alt nav-icon text-warning"></i>
+                  <p>Kết nối TikTok & YouTube</p>
+                  <span class="badge badge-success right">Guide</span>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="{{ route('admin.help.show', 'troubleshooting') }}" class="nav-link {{ request()->routeIs('admin.help.show') && request()->route('section') === 'troubleshooting' ? 'active' : '' }}">
                   <i class="fas fa-tools nav-icon text-danger"></i>
                   <p>Xử lý sự cố</p>

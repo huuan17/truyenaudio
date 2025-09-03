@@ -113,6 +113,12 @@ class HelpController extends Controller
                 'color' => 'info',
                 'md_file' => 'TIKTOK_SETUP_GUIDE.md'
             ],
+            'social-media-integration' => [
+                'title' => 'Kết nối TikTok & YouTube',
+                'icon' => 'fas fa-share-alt',
+                'description' => 'Hướng dẫn kết nối và cấu hình TikTok, YouTube OAuth',
+                'color' => 'warning'
+            ],
             'story-visibility' => [
                 'title' => 'Story Visibility',
                 'icon' => 'fas fa-eye',
@@ -195,6 +201,8 @@ class HelpController extends Controller
                 return $this->getQueueContent();
             case 'troubleshooting':
                 return $this->getTroubleshootingContent();
+            case 'social-media-integration':
+                return $this->getSocialMediaIntegrationContent();
             default:
                 return [];
         }
@@ -652,6 +660,159 @@ class HelpController extends Controller
                     '🐛 Bug Report: GitHub issues',
                     '💡 Feature Request: Feedback form'
                 ]
+            ]
+        ];
+    }
+
+    private function getSocialMediaIntegrationContent()
+    {
+        return [
+            'tiktok_setup' => [
+                'title' => '🎵 Kết nối TikTok',
+                'content' => '
+                    <h5>Tổng quan</h5>
+                    <p>Hướng dẫn từng bước để kết nối TikTok với hệ thống và đăng video tự động.</p>
+
+                    <h5>Yêu cầu</h5>
+                    <ul>
+                        <li>📱 Tài khoản TikTok Business hoặc Creator</li>
+                        <li>🔑 TikTok Developer Account</li>
+                        <li>🌐 Domain hoặc localhost để test</li>
+                        <li>📋 Terms of Service và Privacy Policy URLs</li>
+                    </ul>
+
+                    <h5>Các bước thực hiện</h5>
+                    <ol>
+                        <li><strong>Tạo TikTok Developer App</strong><br>
+                            • Truy cập: <a href="https://developers.tiktok.com/" target="_blank">TikTok Developer Portal</a><br>
+                            • Đăng nhập với tài khoản TikTok<br>
+                            • Nhấn "Create an app"<br>
+                            • Điền thông tin app cơ bản</li>
+
+                        <li><strong>Cấu hình URLs</strong><br>
+                            • Terms of Service: <code>' . route('terms.service') . '</code><br>
+                            • Privacy Policy: <code>' . route('privacy.policy') . '</code><br>
+                            • Web/Desktop URL: <code>' . config('app.url') . '</code><br>
+                            • Redirect URI: <code>' . route('admin.channels.tiktok.oauth.callback') . '</code></li>
+
+                        <li><strong>Chọn Scopes</strong><br>
+                            • ✅ user.info.basic (thông tin cơ bản)<br>
+                            • ✅ video.upload (upload video)<br>
+                            • ✅ video.publish (đăng video)</li>
+
+                        <li><strong>Lấy Credentials</strong><br>
+                            • Copy Client Key từ app dashboard<br>
+                            • Copy Client Secret từ app dashboard<br>
+                            • Cập nhật file .env:<br>
+                            <pre>TIKTOK_CLIENT_ID=your_client_key<br>TIKTOK_CLIENT_SECRET=your_client_secret</pre></li>
+
+                        <li><strong>Test Kết nối</strong><br>
+                            • Vào <a href="' . route('admin.test.tiktok.oauth') . '" target="_blank">TikTok Test Page</a><br>
+                            • Nhập credentials và test OAuth<br>
+                            • Hoặc tạo kênh mới trong <a href="' . route('admin.channels.create') . '" target="_blank">Channel Management</a></li>
+                    </ol>
+
+                    <h5>Khắc phục lỗi thường gặp</h5>
+                    <ul>
+                        <li>❌ <strong>"client_key" error</strong>: Client key không hợp lệ hoặc app chưa được approve</li>
+                        <li>❌ <strong>"redirect_uri" error</strong>: Redirect URI chưa được thêm vào whitelist</li>
+                        <li>❌ <strong>"scope" error</strong>: Scopes chưa được approve cho app</li>
+                        <li>❌ <strong>"code_challenge" error</strong>: Đã được fix với PKCE implementation</li>
+                        <li>🔧 <strong>Giải pháp</strong>: Sử dụng <a href="' . route('admin.tiktok.setup.guide') . '" target="_blank">TikTok Setup Guide</a> để debug</li>
+                    </ul>
+                '
+            ],
+            'youtube_setup' => [
+                'title' => '📺 Kết nối YouTube',
+                'content' => '
+                    <h5>Tổng quan</h5>
+                    <p>Hướng dẫn kết nối YouTube để upload video tự động lên kênh YouTube.</p>
+
+                    <h5>Yêu cầu</h5>
+                    <ul>
+                        <li>📺 Kênh YouTube đã được xác minh</li>
+                        <li>🔑 Google Cloud Project với YouTube Data API v3</li>
+                        <li>🌐 OAuth 2.0 credentials</li>
+                        <li>📋 Verified domain (cho production)</li>
+                    </ul>
+
+                    <h5>Các bước thực hiện</h5>
+                    <ol>
+                        <li><strong>Tạo Google Cloud Project</strong><br>
+                            • Truy cập: <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a><br>
+                            • Tạo project mới hoặc chọn project hiện có<br>
+                            • Enable YouTube Data API v3</li>
+
+                        <li><strong>Tạo OAuth 2.0 Credentials</strong><br>
+                            • Vào APIs & Services > Credentials<br>
+                            • Create Credentials > OAuth 2.0 Client IDs<br>
+                            • Application type: Web application<br>
+                            • Authorized redirect URIs: <code>' . config('app.url') . '/admin/channels/youtube/callback</code></li>
+
+                        <li><strong>Cấu hình OAuth Consent Screen</strong><br>
+                            • User Type: External (cho testing)<br>
+                            • App name: Audio Lara<br>
+                            • User support email: your-email@domain.com<br>
+                            • Scopes: YouTube Data API v3</li>
+
+                        <li><strong>Cập nhật .env</strong><br>
+                            <pre>GOOGLE_CLIENT_ID=your_client_id<br>GOOGLE_CLIENT_SECRET=your_client_secret<br>GOOGLE_REDIRECT_URI=' . config('app.url') . '/admin/channels/youtube/callback</pre></li>
+
+                        <li><strong>Test Kết nối</strong><br>
+                            • Tạo kênh YouTube mới trong Channel Management<br>
+                            • Thực hiện OAuth flow<br>
+                            • Test upload video</li>
+                    </ol>
+
+                    <h5>YouTube API Scopes</h5>
+                    <ul>
+                        <li>📺 youtube.upload - Upload videos</li>
+                        <li>📋 youtube.readonly - Read channel info</li>
+                        <li>✏️ youtube - Manage channel (optional)</li>
+                    </ul>
+                '
+            ],
+            'best_practices' => [
+                'title' => '💡 Best Practices',
+                'content' => '
+                    <h5>Bảo mật</h5>
+                    <ul>
+                        <li>🔐 Không commit credentials vào Git</li>
+                        <li>🌐 Sử dụng HTTPS cho production</li>
+                        <li>🔄 Định kỳ rotate API keys</li>
+                        <li>📝 Monitor API usage và rate limits</li>
+                    </ul>
+
+                    <h5>Production Deployment</h5>
+                    <ul>
+                        <li>🌍 Cập nhật APP_URL trong .env</li>
+                        <li>📋 Đăng ký lại URLs trong Developer Portals</li>
+                        <li>✅ Verify domain ownership</li>
+                        <li>🔍 Test OAuth flows trên production</li>
+                    </ul>
+
+                    <h5>Monitoring & Maintenance</h5>
+                    <ul>
+                        <li>📊 Monitor API quotas và usage</li>
+                        <li>🔄 Handle token refresh tự động</li>
+                        <li>📝 Log OAuth errors để debug</li>
+                        <li>⚡ Implement retry logic cho failed uploads</li>
+                    </ul>
+                '
+            ],
+            'quick_links' => [
+                'title' => '🔗 Quick Links',
+                'content' => '
+                    <h5>Các liên kết hữu ích</h5>
+                    <ul>
+                        <li>🎵 <a href="' . route('admin.tiktok.setup.guide') . '" target="_blank">TikTok Setup Guide</a></li>
+                        <li>🧪 <a href="' . route('admin.test.tiktok.oauth') . '" target="_blank">TikTok OAuth Test</a></li>
+                        <li>📺 <a href="' . route('admin.channels.create') . '" target="_blank">Create New Channel</a></li>
+                        <li>⚙️ <a href="' . route('admin.channels.index') . '" target="_blank">Manage Channels</a></li>
+                        <li>📋 <a href="' . route('terms.service') . '" target="_blank">Terms of Service</a></li>
+                        <li>🔒 <a href="' . route('privacy.policy') . '" target="_blank">Privacy Policy</a></li>
+                    </ul>
+                '
             ]
         ];
     }

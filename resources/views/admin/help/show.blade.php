@@ -93,7 +93,7 @@
                                 </h5>
 
                                 @if(isset($contentSection['content']))
-                                <p class="text-muted mb-3">{{ $contentSection['content'] }}</p>
+                                <div class="text-muted mb-3">{!! $contentSection['content'] !!}</div>
                                 @endif
                             
                             @if(isset($contentSection['steps']))

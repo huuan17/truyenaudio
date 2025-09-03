@@ -114,27 +114,61 @@ TIKTOK_CLIENT_SECRET=your_client_secret_here</pre>
 
                             <div class="card bg-warning mt-3">
                                 <div class="card-header">
-                                    <h5>Required URLs for TikTok</h5>
+                                    <h5>📋 Required URLs for TikTok Developer Portal</h5>
                                 </div>
                                 <div class="card-body">
-                                    <table class="table table-sm table-borderless">
+                                    <div class="alert alert-info alert-sm">
+                                        <small><i class="fas fa-info-circle"></i> Copy các URL này vào TikTok Developer Portal</small>
+                                    </div>
+                                    <table class="table table-sm">
                                         <tr>
-                                            <td><strong>Terms of Service:</strong></td>
-                                            <td><small><a href="{{ route('terms.service') }}" target="_blank" class="text-dark">{{ route('terms.service') }}</a></small></td>
+                                            <td><strong>Terms of Service URL:</strong></td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control" value="{{ route('terms.service') }}" readonly id="terms-url">
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('terms-url')">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                         <tr>
-                                            <td><strong>Privacy Policy:</strong></td>
-                                            <td><small><a href="{{ route('privacy.policy') }}" target="_blank" class="text-dark">{{ route('privacy.policy') }}</a></small></td>
+                                            <td><strong>Privacy Policy URL:</strong></td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control" value="{{ route('privacy.policy') }}" readonly id="privacy-url">
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('privacy-url')">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td><strong>Web/Desktop URL:</strong></td>
-                                            <td><small><a href="{{ config('app.url') }}" target="_blank" class="text-dark">{{ config('app.url') }}</a></small></td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control" value="{{ config('app.url') }}" readonly id="web-url">
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('web-url')">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                         <tr>
                                             <td><strong>Redirect URI:</strong></td>
-                                            <td><small><code>{{ route('admin.channels.tiktok.oauth.callback') }}</code></small></td>
+                                            <td>
+                                                <div class="input-group input-group-sm">
+                                                    <input type="text" class="form-control" value="{{ route('admin.channels.tiktok.oauth.callback') }}" readonly id="redirect-url">
+                                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('redirect-url')">
+                                                        <i class="fas fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
                                         </tr>
                                     </table>
+                                    <div class="alert alert-warning alert-sm mt-2">
+                                        <small><i class="fas fa-exclamation-triangle"></i> <strong>Lưu ý:</strong> Khi deploy lên production, cập nhật APP_URL trong .env và đăng ký lại URLs trong TikTok Developer Portal</small>
+                                    </div>
                                 </div>
                             </div>
 
@@ -168,12 +202,12 @@ TIKTOK_CLIENT_SECRET=your_client_secret_here</pre>
 function quickTest() {
     const clientKey = document.getElementById('test_client_key').value;
     const clientSecret = document.getElementById('test_client_secret').value;
-    
+
     if (!clientKey || !clientSecret) {
         alert('Vui lòng nhập Client Key và Client Secret');
         return;
     }
-    
+
     fetch('{{ route("admin.channels.tiktok.oauth.start") }}', {
         method: 'POST',
         headers: {
@@ -188,7 +222,7 @@ function quickTest() {
     .then(response => response.json())
     .then(data => {
         const result = document.getElementById('quickTestResult');
-        
+
         if (data.success) {
             result.innerHTML = `
                 <div class="alert alert-success alert-sm">
@@ -207,13 +241,39 @@ function quickTest() {
                 </div>
             `;
         }
-        
+
         result.style.display = 'block';
     })
     .catch(error => {
         console.error('Error:', error);
         alert('Có lỗi xảy ra: ' + error.message);
     });
+}
+
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    element.select();
+    element.setSelectionRange(0, 99999); // For mobile devices
+
+    try {
+        document.execCommand('copy');
+
+        // Show success feedback
+        const button = element.nextElementSibling;
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check text-success"></i>';
+        button.classList.add('btn-success');
+        button.classList.remove('btn-outline-secondary');
+
+        setTimeout(() => {
+            button.innerHTML = originalHTML;
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-secondary');
+        }, 2000);
+
+    } catch (err) {
+        alert('Không thể copy. Vui lòng copy thủ công.');
+    }
 }
 </script>
 @endsection
