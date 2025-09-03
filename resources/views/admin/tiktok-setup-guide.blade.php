@@ -61,7 +61,7 @@ TIKTOK_CLIENT_SECRET=your_client_secret_here</pre>
 
                             <h4>Bước 4: Test OAuth</h4>
                             <ol>
-                                <li>Mở <a href="{{ route('test.tiktok.oauth') }}" target="_blank">TikTok OAuth Test Page</a></li>
+                                <li>Mở <a href="{{ route('admin.test.tiktok.oauth') }}" target="_blank">TikTok OAuth Test Page</a></li>
                                 <li>Nhập Client Key và Secret mới</li>
                                 <li>Nhấn "Test OAuth URL"</li>
                                 <li>Nhấn "Start OAuth" để test</li>
@@ -112,6 +112,32 @@ TIKTOK_CLIENT_SECRET=your_client_secret_here</pre>
                                 </div>
                             </div>
 
+                            <div class="card bg-warning mt-3">
+                                <div class="card-header">
+                                    <h5>Required URLs for TikTok</h5>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm table-borderless">
+                                        <tr>
+                                            <td><strong>Terms of Service:</strong></td>
+                                            <td><small><a href="{{ route('terms.service') }}" target="_blank" class="text-dark">{{ route('terms.service') }}</a></small></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Privacy Policy:</strong></td>
+                                            <td><small><a href="{{ route('privacy.policy') }}" target="_blank" class="text-dark">{{ route('privacy.policy') }}</a></small></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Web/Desktop URL:</strong></td>
+                                            <td><small><a href="{{ config('app.url') }}" target="_blank" class="text-dark">{{ config('app.url') }}</a></small></td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Redirect URI:</strong></td>
+                                            <td><small><code>{{ route('admin.channels.tiktok.oauth.callback') }}</code></small></td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+
                             <div class="card bg-success mt-3">
                                 <div class="card-header">
                                     <h5>Useful Links</h5>
@@ -121,7 +147,7 @@ TIKTOK_CLIENT_SECRET=your_client_secret_here</pre>
                                         <li><a href="https://developers.tiktok.com/" target="_blank" class="text-white">
                                             <i class="fas fa-external-link-alt"></i> TikTok Developer Portal
                                         </a></li>
-                                        <li><a href="{{ route('test.tiktok.oauth') }}" target="_blank" class="text-white">
+                                        <li><a href="{{ route('admin.test.tiktok.oauth') }}" target="_blank" class="text-white">
                                             <i class="fas fa-vial"></i> OAuth Test Page
                                         </a></li>
                                         <li><a href="{{ route('admin.channels.create') }}" target="_blank" class="text-white">

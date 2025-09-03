@@ -20,7 +20,7 @@
                         </ol>
                         <p class="mb-0">
                             <strong>Gặp lỗi "client_key"?</strong>
-                            <a href="{{ route('tiktok.setup.guide') }}" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ route('admin.tiktok.setup.guide') }}" class="btn btn-sm btn-outline-primary">
                                 <i class="fas fa-book"></i> Xem hướng dẫn setup
                             </a>
                         </p>

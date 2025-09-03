@@ -24,6 +24,20 @@ use App\Http\Controllers\Auth\LoginController;
 |
 */
 
+// Legal pages for TikTok Developer Portal
+Route::get('/terms-of-service', function () {
+    return view('terms-of-service');
+})->name('terms.service');
+
+Route::get('/privacy-policy', function () {
+    return view('privacy-policy');
+})->name('privacy.policy');
+
+// Home page
+Route::get('/', function () {
+    return view('welcome');
+})->name('home');
+
 // Authentication Routes
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
