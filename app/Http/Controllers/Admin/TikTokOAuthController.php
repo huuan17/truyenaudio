@@ -277,6 +277,14 @@ class TikTokOAuthController extends Controller
 
             $authUrl = $tempService->getAuthorizationUrl($state);
 
+            Log::info('TikTok OAuth URL Generated with PKCE', [
+                'client_key' => $request->client_key,
+                'redirect_uri' => route('admin.channels.tiktok.oauth.callback'),
+                'auth_url' => $authUrl,
+                'state' => $state,
+                'has_code_verifier' => session()->has('tiktok_code_verifier')
+            ]);
+
             return response()->json([
                 'success' => true,
                 'auth_url' => $authUrl
@@ -300,12 +308,25 @@ class TikTokOAuthController extends Controller
     public function callbackForNewChannel(Request $request)
     {
         try {
+            Log::info('TikTok OAuth Callback Received', [
+                'all_params' => $request->all(),
+                'session_state' => session('tiktok_oauth_state'),
+                'session_for_new_channel' => session('tiktok_oauth_for_new_channel'),
+                'has_code_verifier' => session()->has('tiktok_code_verifier')
+            ]);
+
             // Verify state parameter
             $state = $request->get('state');
             $sessionState = session('tiktok_oauth_state');
             $isForNewChannel = session('tiktok_oauth_for_new_channel');
 
             if (!$state || !$sessionState || $state !== $sessionState || !$isForNewChannel) {
+                Log::warning('TikTok OAuth State Mismatch', [
+                    'received_state' => $state,
+                    'session_state' => $sessionState,
+                    'is_for_new_channel' => $isForNewChannel
+                ]);
+
                 return redirect()->route('admin.channels.create')
                     ->with('error', 'OAuth state không hợp lệ');
             }

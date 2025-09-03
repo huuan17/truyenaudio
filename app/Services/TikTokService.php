@@ -20,52 +20,102 @@ class TikTokService
         $this->clientKey = $clientKey ?: config('services.tiktok.client_id');
         $this->clientSecret = $clientSecret ?: config('services.tiktok.client_secret');
         $this->redirectUri = $redirectUri ?: config('services.tiktok.redirect_uri');
-        $this->sandbox = config('services.tiktok.sandbox', true);
+        $this->sandbox = config('services.tiktok.sandbox', false); // Mặc định sử dụng production
         $this->apiVersion = config('services.tiktok.api_version', 'v2');
-        
-        // Sử dụng sandbox URL nếu đang trong chế độ test
-        $this->baseUrl = $this->sandbox 
+
+        // Sử dụng production URL để tránh lỗi sandbox
+        $this->baseUrl = $this->sandbox
             ? 'https://sandbox-open-api.tiktok.com'
             : 'https://open-api.tiktok.com';
     }
 
     /**
-     * Tạo authorization URL để user có thể authorize app
+     * Tạo authorization URL với PKCE support
      */
     public function getAuthorizationUrl($state = null)
     {
+        // Generate PKCE parameters
+        $codeVerifier = $this->generateCodeVerifier();
+        $codeChallenge = $this->generateCodeChallenge($codeVerifier);
+
+        // Store code verifier in session for later use
+        session(['tiktok_code_verifier' => $codeVerifier]);
+
         $params = [
             'client_key' => $this->clientKey,
             'scope' => 'video.upload,video.publish,user.info.basic',
             'response_type' => 'code',
             'redirect_uri' => $this->redirectUri,
-            'state' => $state ?: uniqid()
+            'state' => $state ?: uniqid(),
+            'code_challenge' => $codeChallenge,
+            'code_challenge_method' => 'S256'
         ];
 
         $queryString = http_build_query($params);
-        
-        return $this->sandbox 
+
+        // Sử dụng production URL để tránh lỗi sandbox
+        return $this->sandbox
             ? "https://sandbox-www.tiktok.com/v2/auth/authorize?{$queryString}"
             : "https://www.tiktok.com/v2/auth/authorize?{$queryString}";
     }
 
     /**
-     * Exchange authorization code cho access token
+     * Generate code verifier for PKCE
+     */
+    private function generateCodeVerifier()
+    {
+        $characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+        $length = random_int(43, 128); // RFC 7636 specifies 43-128 characters
+        $codeVerifier = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $codeVerifier .= $characters[random_int(0, strlen($characters) - 1)];
+        }
+
+        return $codeVerifier;
+    }
+
+    /**
+     * Generate code challenge from code verifier
+     */
+    private function generateCodeChallenge($codeVerifier)
+    {
+        return rtrim(strtr(base64_encode(hash('sha256', $codeVerifier, true)), '+/', '-_'), '=');
+    }
+
+    /**
+     * Exchange authorization code cho access token với PKCE
      */
     public function getAccessToken($code)
     {
         try {
-            $response = Http::asForm()->post("{$this->baseUrl}/v2/oauth/token/", [
+            // Get code verifier from session
+            $codeVerifier = session('tiktok_code_verifier');
+
+            if (!$codeVerifier) {
+                return [
+                    'success' => false,
+                    'error' => 'Code verifier not found in session'
+                ];
+            }
+
+            $requestData = [
                 'client_key' => $this->clientKey,
                 'client_secret' => $this->clientSecret,
                 'code' => $code,
                 'grant_type' => 'authorization_code',
                 'redirect_uri' => $this->redirectUri,
-            ]);
+                'code_verifier' => $codeVerifier
+            ];
+
+            $response = Http::asForm()->post("{$this->baseUrl}/v2/oauth/token/", $requestData);
+
+            // Clear code verifier from session
+            session()->forget('tiktok_code_verifier');
 
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 if (isset($data['data'])) {
                     return [
                         'success' => true,

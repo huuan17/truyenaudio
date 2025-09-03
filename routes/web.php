@@ -176,6 +176,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/channels/tiktok/oauth/callback', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'callbackForNewChannel'])->name('channels.tiktok.oauth.callback');
         Route::post('/channels/tiktok/get-channel-id', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'getChannelId'])->name('channels.tiktok.get-channel-id');
 
+        // TikTok OAuth Test Page
+        Route::get('/test-tiktok-oauth', function () {
+            return view('admin.test-tiktok-oauth');
+        })->name('test.tiktok.oauth');
+
         // Scheduled Posts Management
         Route::resource('scheduled-posts', App\Http\Controllers\Admin\ScheduledPostController::class);
         Route::patch('/scheduled-posts/{scheduledPost}/cancel', [App\Http\Controllers\Admin\ScheduledPostController::class, 'cancel'])->name('scheduled-posts.cancel');
