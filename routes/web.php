@@ -176,10 +176,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/channels/tiktok/oauth/callback', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'callbackForNewChannel'])->name('channels.tiktok.oauth.callback');
         Route::post('/channels/tiktok/get-channel-id', [App\Http\Controllers\Admin\TikTokOAuthController::class, 'getChannelId'])->name('channels.tiktok.get-channel-id');
 
-        // TikTok OAuth Test Page
-        Route::get('/test-tiktok-oauth', function () {
-            return view('admin.test-tiktok-oauth');
-        })->name('test.tiktok.oauth');
+
 
         // Scheduled Posts Management
         Route::resource('scheduled-posts', App\Http\Controllers\Admin\ScheduledPostController::class);
@@ -488,6 +485,16 @@ Route::middleware(['auth'])->group(function () {
         // Legacy crawl routes
         Route::get('/crawl', [CrawlController::class, 'index'])->name('crawl.index');
         Route::post('/crawl/run/{story}', [CrawlController::class, 'run'])->name('crawl.run');
+
+        // TikTok OAuth Test Page
+        Route::get('/test-tiktok-oauth', function () {
+            return view('admin.test-tiktok-oauth');
+        })->name('test.tiktok.oauth');
+
+        // TikTok Setup Guide
+        Route::get('/tiktok-setup-guide', function () {
+            return view('admin.tiktok-setup-guide');
+        })->name('tiktok.setup.guide');
     });
 
     // Audio file serving route (outside admin prefix for direct access)

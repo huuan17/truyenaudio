@@ -18,6 +18,12 @@
                             <li>Nhấn "Test OAuth URL" để kiểm tra URL được tạo</li>
                             <li>Nhấn "Start OAuth" để test thực tế</li>
                         </ol>
+                        <p class="mb-0">
+                            <strong>Gặp lỗi "client_key"?</strong>
+                            <a href="{{ route('tiktok.setup.guide') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-book"></i> Xem hướng dẫn setup
+                            </a>
+                        </p>
                     </div>
 
                     <form id="testForm">
